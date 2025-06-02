@@ -1,4 +1,4 @@
-# 🎧 PodLens - Intelligent Podcast & Youtube Transcription & Summary & Understanding AI Agent
+# 🎧 PodLens - Intelligent Podcast & Youtube Transcription & Summary Tool
 
 ```
   ██████╗  ██████╗ ██████╗ ██╗     ███████╗███╗   ██╗███████╗
@@ -13,7 +13,7 @@
 
 For knowledge-seekers who want to learn from audio content more effectively.
 
-A cost-free & powerful podcast transcription and summarization tool that supports both Apple Podcast and YouTube platforms, featuring bilingual Chinese/English interface and integrating multiple AI technologies for high-quality audio transcription and intelligent summarization.
+A fast & cost-free & powerful podcast transcription and summarization tool that supports both Apple Podcast and YouTube platforms, featuring bilingual Chinese/English interface and integrating multiple AI technologies for high-quality audio transcription and intelligent summarization.
 
 ## ✨ Key Features
 
@@ -28,7 +28,7 @@ A cost-free & powerful podcast transcription and summarization tool that support
 
 ## 📝 Note:
 
-* For audio files larger than 25MB after compression, the transcription will be done by MLX Whisper, which is local for Mac users, and not yet available for Windows users. Windows user can still use Groq API for transcription for files smaller than 25MB.*
+*For audio files larger than 25MB after compression, the transcription will be done by MLX Whisper, which is local for Mac users, and not yet available for Windows users. Windows user can still use Groq API for transcription for files smaller than 25MB.*
 
 ## 📦 Installation
 
