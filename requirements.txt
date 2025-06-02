@@ -1,0 +1,11 @@
+requests
+feedparser>=6.0.0
+python-dotenv
+google-generativeai
+beautifulsoup4
+tqdm
+mlx-whisper
+groq
+openai-whisper
+youtube-transcript-api
+yt-dlp 

@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "echomind"
+version = "1.0.0"
+description = "播客转录与摘要工具，支持 Apple Podcast 和 YouTube 平台"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "EchoMind Team", email = "contact@echomind.app"}
+]
+maintainers = [
+    {name = "EchoMind Team", email = "contact@echomind.app"}
+]
+keywords = ["podcast", "transcription", "summary", "youtube", "apple podcast", "whisper", "ai"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "Topic :: Multimedia :: Sound/Audio",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "requests",
+    "feedparser>=6.0.0",
+    "python-dotenv",
+    "google-generativeai",
+    "beautifulsoup4",
+    "tqdm",
+    "mlx-whisper",
+    "groq",
+    "openai-whisper",
+    "youtube-transcript-api",
+    "yt-dlp",
+]
+
+[project.scripts]
+echomind-zh = "echomind.cli_ch:main"
+echomind-en = "echomind.cli_en:main"
+echomind-ch = "echomind.cli_ch:main"
+echomind = "echomind.cli_en:main"
+
+[project.urls]
+Homepage = "https://github.com/henryzha/echomind"
+Repository = "https://github.com/henryzha/echomind.git"
+Documentation = "https://github.com/henryzha/echomind#readme"
+"Bug Tracker" = "https://github.com/henryzha/echomind/issues"
+
+[tool.setuptools]
+packages = ["echomind"]
+
+[tool.setuptools.package-data]
+echomind = ["*.py"] 
