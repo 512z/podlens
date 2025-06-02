@@ -1,4 +1,4 @@
-# 🎧 PodLens - Intelligent Podcast & Youtube Transcription & Summary Tool
+# 🎧 PodLens - Intelligent Podcast & Youtube Transcription & Summary & Understanding AI Agent
 
 ```
   ██████╗  ██████╗ ██████╗ ██╗     ███████╗███╗   ██╗███████╗
