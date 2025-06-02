@@ -1,5 +1,5 @@
 """
-EchoMind - 智能播客转录与摘要工具 / Intelligent Podcast Transcription and Summary Tool
+PodLens - 智能播客转录与摘要工具 / Intelligent Podcast Transcription and Summary Tool
 
 支持 Apple Podcast 和 YouTube 平台，提供中英文双语界面
 Supports Apple Podcast and YouTube platforms with bilingual Chinese/English interface

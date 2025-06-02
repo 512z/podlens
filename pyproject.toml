@@ -3,16 +3,16 @@ requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "echomind"
+name = "podlens"
 version = "1.0.0"
 description = "播客转录与摘要工具，支持 Apple Podcast 和 YouTube 平台"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "EchoMind Team", email = "contact@echomind.app"}
+    {name = "PodLens Team", email = "contact@podlens.app"}
 ]
 maintainers = [
-    {name = "EchoMind Team", email = "contact@echomind.app"}
+    {name = "PodLens Team", email = "contact@podlens.app"}
 ]
 keywords = ["podcast", "transcription", "summary", "youtube", "apple podcast", "whisper", "ai"]
 classifiers = [
@@ -44,19 +44,19 @@ dependencies = [
 ]
 
 [project.scripts]
-echomind-zh = "echomind.cli_ch:main"
-echomind-en = "echomind.cli_en:main"
-echomind-ch = "echomind.cli_ch:main"
-echomind = "echomind.cli_en:main"
+podlens-zh = "podlens.cli_ch:main"
+podlens-en = "podlens.cli_en:main"
+podlens-ch = "podlens.cli_ch:main"
+podlens = "podlens.cli_en:main"
 
 [project.urls]
-Homepage = "https://github.com/henryzha/echomind"
-Repository = "https://github.com/henryzha/echomind.git"
-Documentation = "https://github.com/henryzha/echomind#readme"
-"Bug Tracker" = "https://github.com/henryzha/echomind/issues"
+Homepage = "https://github.com/henryzha/podlens"
+Repository = "https://github.com/henryzha/podlens.git"
+Documentation = "https://github.com/henryzha/podlens#readme"
+"Bug Tracker" = "https://github.com/henryzha/podlens/issues"
 
 [tool.setuptools]
-packages = ["echomind"]
+packages = ["podlens"]
 
 [tool.setuptools.package-data]
-echomind = ["*.py"] 
+podlens = ["*.py"] 

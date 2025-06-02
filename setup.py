@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-EchoMind - 播客转录与摘要工具 / Podcast Transcription and Summary Tool
+PodLens - 播客转录与摘要工具 / Podcast Transcription and Summary Tool
 支持 Apple Podcast 和 YouTube 平台，提供中英文双语界面
 Supports Apple Podcast and YouTube platforms with bilingual Chinese/English interface
 """
@@ -15,14 +15,14 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
     requirements = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
 
 setup(
-    name="echomind",
+    name="podlens",
     version="1.0.0",
-    author="EchoMind Team",
-    author_email="contact@echomind.app",
+    author="PodLens Team",
+    author_email="contact@podlens.app",
     description="智能播客转录与摘要工具，支持 Apple Podcast 和 YouTube / Intelligent podcast transcription and summary tool for Apple Podcast and YouTube",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/henryzha/echomind",
+    url="https://github.com/henryzha/podlens",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 4 - Beta",
@@ -45,12 +45,12 @@ setup(
     entry_points={
         "console_scripts": [
             # 双语命令入口点 / Bilingual command entry points
-            "echomind-zh=echomind.cli_ch:main",     # 中文版 / Chinese version
-            "echomind-en=echomind.cli_en:main",     # 英文版 / English version
-            "echomind-ch=echomind.cli_ch:main",     # 中文版别名 / Chinese alias
+            "podlens-zh=podlens.cli_ch:main",     # 中文版 / Chinese version
+            "podlens-en=podlens.cli_en:main",     # 英文版 / English version
+            "podlens-ch=podlens.cli_ch:main",     # 中文版别名 / Chinese alias
             
             # 默认命令（英文版）/ Default command (English version)
-            "echomind=echomind.cli_en:main",
+            "podlens=podlens.cli_en:main",
         ],
     },
     keywords=[
@@ -59,10 +59,10 @@ setup(
         "gemini", "groq", "mlx", "audio processing", "text generation"
     ],
     project_urls={
-        "Bug Reports": "https://github.com/henryzha/echomind/issues",
-        "Source": "https://github.com/henryzha/echomind",
-        "Documentation": "https://github.com/henryzha/echomind#readme",
-        "Homepage": "https://github.com/henryzha/echomind",
+        "Bug Reports": "https://github.com/henryzha/podlens/issues",
+        "Source": "https://github.com/henryzha/podlens",
+        "Documentation": "https://github.com/henryzha/podlens#readme",
+        "Homepage": "https://github.com/henryzha/podlens",
     },
     include_package_data=True,
     zip_safe=False,

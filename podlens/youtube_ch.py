@@ -17,37 +17,41 @@ import urllib.parse
 # Load .env file
 load_dotenv()
 
-# Whisper transcription support
+# Whisper 转录支持
 try:
     import mlx_whisper
     import mlx.core as mx
     MLX_WHISPER_AVAILABLE = True
+    # 检查 MLX 设备可用性
     MLX_DEVICE = mx.default_device()
-    # print(f"🎯 MLX Whisper available, using device: {MLX_DEVICE}")
+    # print(f"🎯 MLX Whisper 可用，使用设备: {MLX_DEVICE}")
 except ImportError:
     MLX_WHISPER_AVAILABLE = False
-    # print("⚠️  MLX Whisper not available")
+    # print("⚠️  MLX Whisper 不可用")
 
-# Groq API ultra-fast transcription
+# Groq API 极速转录
 try:
     from groq import Groq
     GROQ_API_KEY = os.getenv('GROQ_API_KEY')
     GROQ_AVAILABLE = bool(GROQ_API_KEY)
     # if GROQ_AVAILABLE:
-    #     print(f"🚀 Groq API available, ultra-fast transcription enabled")
+    #     print(f"🚀 Groq API 可用，已启用超快转录")
     # else:
-    #     print("⚠️  Groq API key not set")
+    #     print("⚠️  未设置 Groq API 密钥")
 except ImportError:
     GROQ_AVAILABLE = False
-    # print("⚠️  Groq SDK not installed")
+    # print("⚠️  未安装 Groq SDK")
 
-# Gemini API summary support
+# Gemini API 摘要支持
 try:
     GEMINI_AVAILABLE = True
 except ImportError:
     GEMINI_AVAILABLE = False
 
-# YouTube transcript extraction
+# 检查转录功能可用性
+TRANSCRIPTION_AVAILABLE = MLX_WHISPER_AVAILABLE or GROQ_AVAILABLE
+
+# YouTube 转录提取
 try:
     from youtube_transcript_api import YouTubeTranscriptApi
     from youtube_transcript_api.formatters import TextFormatter
@@ -55,15 +59,15 @@ try:
 except ImportError:
     YOUTUBE_TRANSCRIPT_AVAILABLE = False
 
-# YouTube audio download fallback
+# YouTube 音频下载备用方案
 try:
     import yt_dlp
     YT_DLP_AVAILABLE = True
 except ImportError:
     YT_DLP_AVAILABLE = False
-    print("⚠️  yt-dlp not installed, YouTube audio download fallback unavailable")
+    print("⚠️  未安装 yt-dlp，YouTube 音频下载备用方案不可用")
 
-# Local Whisper free audio transcription (for YouTube)
+# 本地 Whisper 免费音频转录（用于 YouTube）
 try:
     import whisper
     WHISPER_AVAILABLE = True
@@ -99,7 +103,7 @@ class YouTubeSearcher:
             else:
                 return "YouTube Video"
         except Exception as e:
-            print(f"Could not get video title: {e}")
+            print(f"无法获取视频标题: {e}")
             return "YouTube Video"
     
     def search_youtube_podcast(self, podcast_name: str, num_episodes: int = 5) -> List[Dict]:
@@ -221,7 +225,7 @@ class YouTubeSearcher:
             return videos
             
         except Exception as e:
-            print(f"YouTube search failed: {e}")
+            print(f"YouTube搜索失败: {e}")
             return []
 
 
@@ -278,7 +282,7 @@ class TranscriptExtractor:
     def download_youtube_audio(self, video_url: str, title: str) -> Optional[Path]:
         """Download YouTube video audio using yt-dlp"""
         if not YT_DLP_AVAILABLE:
-            print("❌ yt-dlp not available, cannot download audio")
+            print("❌ 未检测到yt-dlp，无法下载音频")
             return None
         
         try:
@@ -289,10 +293,10 @@ class TranscriptExtractor:
             
             # Check if file already exists
             if audio_filepath.exists():
-                print(f"⚠️  Audio file already exists: {audio_filename}")
+                print(f"⚠️  音频文件已存在: {audio_filename}")
                 return audio_filepath
             
-            print(f"📥 Downloading YouTube audio: {title}")
+            print(f"📥 正在下载YouTube音频: {title}")
             
             ydl_opts = {
                 'format': 'bestaudio/best',
@@ -311,18 +315,18 @@ class TranscriptExtractor:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([video_url])
             
-            print(f"✅ Audio download complete: {audio_filename}")
+            print(f"✅ 音频下载完成: {audio_filename}")
             return audio_filepath
             
         except Exception as e:
-            print(f"❌ Audio download failed: {e}")
+            print(f"❌ 音频下载失败: {e}")
             return None
     
     def compress_audio_file(self, input_file: Path, output_file: Path) -> bool:
         """Compress audio file below Groq API limit (copied from Apple section)"""
         try:
-            print(f"🔧 Compressing audio file: {input_file.name}")
-            print("📊 Compression params: 16KHz mono, 64kbps MP3")
+            print(f"🔧 正在压缩音频文件: {input_file.name}")
+            print("📊 压缩参数: 16KHz 单声道, 64kbps MP3")
             
             cmd = [
                 'ffmpeg',
@@ -341,21 +345,21 @@ class TranscriptExtractor:
                 check=True
             )
             
-            print(f"✅ Compression complete: {output_file.name}")
+            print(f"✅ 压缩完成: {output_file.name}")
             return True
             
         except subprocess.CalledProcessError as e:
-            print(f"❌ Compression failed: {e}")
+            print(f"❌ 压缩失败: {e}")
             return False
         except Exception as e:
-            print(f"❌ Compression error: {e}")
+            print(f"❌ 压缩出错: {e}")
             return False
     
     def transcribe_with_groq(self, audio_file: Path) -> dict:
         """Transcribe audio file using Groq API (copied from Apple section)"""
         try:
-            print(f"🚀 Groq API transcription: {audio_file.name}")
-            print("🧠 Using model: whisper-large-v3")
+            print(f"🚀 Groq API转录: {audio_file.name}")
+            print("🧠 使用模型: whisper-large-v3")
             
             start_time = time.time()
             
@@ -377,7 +381,7 @@ class TranscriptExtractor:
             file_size_mb = self.get_file_size_mb(audio_file)
             speed_ratio = file_size_mb / processing_time * 60 if processing_time > 0 else 0
             
-            print(f"✅ Groq transcription complete! Time: {processing_time:.1f}s")
+            print(f"✅ Groq转录完成! 用时: {processing_time:.1f}秒")
             
             return {
                 'text': text,
@@ -388,14 +392,14 @@ class TranscriptExtractor:
             }
             
         except Exception as e:
-            print(f"❌ Groq transcription failed: {e}")
+            print(f"❌ Groq转录失败: {e}")
             return None
     
     def transcribe_with_mlx(self, audio_file: Path) -> dict:
         """Transcribe audio file using MLX Whisper (copied from Apple section)"""
         try:
-            print(f"🎯 MLX Whisper transcription: {audio_file.name}")
-            print("🧠 Using model: mlx-community/whisper-medium")
+            print(f"🎯 MLX Whisper转录: {audio_file.name}")
+            print("🧠 使用模型: mlx-community/whisper-medium")
             
             start_time = time.time()
             
@@ -411,7 +415,7 @@ class TranscriptExtractor:
             file_size_mb = self.get_file_size_mb(audio_file)
             speed_ratio = file_size_mb / processing_time * 60 if processing_time > 0 else 0
             
-            print(f"✅ MLX transcription complete! Time: {processing_time:.1f}s")
+            print(f"✅ MLX转录完成! 用时: {processing_time:.1f}秒")
             
             return {
                 'text': result['text'],
@@ -422,21 +426,21 @@ class TranscriptExtractor:
             }
             
         except Exception as e:
-            print(f"❌ MLX transcription failed: {e}")
+            print(f"❌ MLX转录失败: {e}")
             return None
     
     def transcribe_audio_smart(self, audio_file: Path, title: str) -> Optional[str]:
         """Smart audio transcription: choose best method based on file size (copied and simplified from Apple section)"""
         if not (GROQ_AVAILABLE or MLX_WHISPER_AVAILABLE):
-            print("❌ No available transcription service")
+            print("❌ 没有可用的转录服务")
             return None
         
         try:
-            print(f"🎙️  Starting transcription: {title}")
+            print(f"🎙️  开始转录: {title}")
             
             # Check file size
             file_size_mb = self.get_file_size_mb(audio_file)
-            print(f"📊 Audio file size: {file_size_mb:.1f}MB")
+            print(f"📊 音频文件大小: {file_size_mb:.1f}MB")
             
             groq_limit = 25  # MB
             transcript_result = None
@@ -447,89 +451,89 @@ class TranscriptExtractor:
             # Smart transcription strategy
             if file_size_mb <= groq_limit and GROQ_AVAILABLE:
                 # Case 1: File < 25MB, use Groq directly with MLX fallback
-                print("✅ File size within Groq limit, using ultra-fast transcription")
+                print("✅ 文件大小在Groq限制内，使用超快转录")
                 transcript_result = self.transcribe_with_groq(audio_file)
                 
                 # Fallback to MLX if Groq fails
                 if not transcript_result and MLX_WHISPER_AVAILABLE:
-                    print("🔄 Groq failed, falling back to MLX Whisper...")
+                    print("🔄 Groq转录失败，切换到MLX Whisper...")
                     transcript_result = self.transcribe_with_mlx(audio_file)
             
             elif file_size_mb > groq_limit:
                 # Case 2: File > 25MB, need compression
-                print("⚠️  File exceeds Groq limit, starting compression...")
+                print("⚠️  文件超出Groq限制，开始压缩...")
                 
                 compressed_file = audio_file.parent / f"compressed_{audio_file.name}"
                 
                 if self.compress_audio_file(audio_file, compressed_file):
                     compressed_size = self.get_file_size_mb(compressed_file)
                     final_size = compressed_size
-                    print(f"📊 Compressed size: {compressed_size:.1f}MB")
+                    print(f"📊 压缩后大小: {compressed_size:.1f}MB")
                     
                     if compressed_size <= groq_limit and GROQ_AVAILABLE:
                         # Case 2a: After compression, within Groq limit with MLX fallback
-                        print("✅ After compression within Groq limit, using ultra-fast transcription")
+                        print("✅ 压缩后在Groq限制内，使用超快转录")
                         transcript_result = self.transcribe_with_groq(compressed_file)
                         
                         # Fallback to MLX if Groq fails
                         if not transcript_result and MLX_WHISPER_AVAILABLE:
-                            print("🔄 Groq failed, falling back to MLX Whisper...")
+                            print("🔄 Groq转录失败，切换到MLX Whisper...")
                             transcript_result = self.transcribe_with_mlx(compressed_file)
                     else:
                         # Case 2b: Still over limit, use MLX
-                        print("⚠️  Still over limit after compression, using MLX transcription")
+                        print("⚠️  压缩后仍超出限制，使用MLX转录")
                         if MLX_WHISPER_AVAILABLE:
                             transcript_result = self.transcribe_with_mlx(compressed_file)
                         else:
-                            print("❌ MLX Whisper not available, cannot transcribe large file")
+                            print("❌ 未检测到MLX Whisper，无法转录大文件")
                             return None
                 else:
                     # Compression failed, try MLX
-                    print("❌ Compression failed, trying local MLX transcription")
+                    print("❌ 压缩失败，尝试本地MLX转录")
                     if MLX_WHISPER_AVAILABLE:
                         transcript_result = self.transcribe_with_mlx(audio_file)
                     else:
-                        print("❌ MLX Whisper not available, transcription failed")
+                        print("❌ 未检测到MLX Whisper，转录失败")
                         return None
             
             else:
                 # Case 3: Groq not available, use MLX
-                print("⚠️  Groq API not available, using local MLX transcription")
+                print("⚠️  未检测到Groq API，使用本地MLX转录")
                 if MLX_WHISPER_AVAILABLE:
                     transcript_result = self.transcribe_with_mlx(audio_file)
                 else:
-                    print("❌ MLX Whisper not available, transcription failed")
+                    print("❌ 未检测到MLX Whisper，转录失败")
                     return None
             
             # Handle transcription result
             if not transcript_result:
-                print("❌ All transcription methods failed")
+                print("❌ 所有转录方式均失败")
                 return None
             
             # Clean up files
             try:
                 # Delete original audio file
                 audio_file.unlink()
-                print(f"🗑️  Deleted audio file: {audio_file.name}")
+                print(f"🗑️  已删除音频文件: {audio_file.name}")
                 
                 # Delete compressed file (if exists)
                 if compressed_file and compressed_file.exists():
                     compressed_file.unlink()
-                    print(f"🗑️  Deleted compressed file: {compressed_file.name}")
+                    print(f"🗑️  已删除压缩文件: {compressed_file.name}")
                     
             except Exception as e:
-                print(f"⚠️  Failed to delete file: {e}")
+                print(f"⚠️  删除文件失败: {e}")
             
             return transcript_result['text']
             
         except Exception as e:
-            print(f"❌ Transcription process failed: {e}")
+            print(f"❌ 转录流程失败: {e}")
             return None
     
     def extract_youtube_transcript(self, video_id: str, video_url: str = None, title: str = "Unknown") -> Optional[str]:
         """Extract transcript from YouTube video, with audio download fallback"""
         if not YOUTUBE_TRANSCRIPT_AVAILABLE:
-            print("YouTube transcript API not available, trying audio download fallback...")
+            print("YouTube转录API不可用，尝试音频下载备用方案...")
             if video_url and YT_DLP_AVAILABLE:
                 return self.audio_download_fallback(video_url, title)
             return None
@@ -538,19 +542,19 @@ class TranscriptExtractor:
             # Clean the video ID - remove any extra characters
             clean_video_id = video_id.strip()
             if len(clean_video_id) != 11:
-                print(f"Invalid video ID length: {len(clean_video_id)} (expected 11)")
+                print(f"无效的视频ID长度: {len(clean_video_id)} (应为11位)")
                 if video_url and YT_DLP_AVAILABLE:
                     return self.audio_download_fallback(video_url, title)
                 return None
             
-            print(f"🎯 Prefer YouTube transcript API: {clean_video_id}")
+            print(f"🎯 优先使用YouTube转录API: {clean_video_id}")
             
             # Try multiple times in case of network issues
             max_retries = 3
             for attempt in range(max_retries):
                 try:
                     if attempt > 0:
-                        print(f"  Retry attempt {attempt + 1}/{max_retries}...")
+                        print(f"  重试第{attempt + 1}/{max_retries}次...")
                         import time
                         time.sleep(2)  # Wait 2 seconds between retries
                     
@@ -568,73 +572,73 @@ class TranscriptExtractor:
                         })
                     
                     if not available_transcripts:
-                        print(f"  No available transcripts found in attempt {attempt + 1}")
+                        print(f"  第{attempt + 1}次尝试未找到可用转录")
                         continue
                     
-                    print(f"  Found {len(available_transcripts)} transcript languages:")
+                    print(f"  找到 {len(available_transcripts)} 种转录语言:")
                     for i, trans_info in enumerate(available_transcripts, 1):
-                        status = "auto-generated" if trans_info['is_generated'] else "manual captions"
-                        translatable = "translatable" if trans_info['is_translatable'] else "not translatable"
+                        status = "自动生成" if trans_info['is_generated'] else "手动字幕"
+                        translatable = "可翻译" if trans_info['is_translatable'] else "不可翻译"
                         print(f"    {i}. {trans_info['language_code']} - {trans_info['language_name']} ({status}, {translatable})")
                     
                     # If only one transcript available, use it directly
                     if len(available_transcripts) == 1:
                         selected_transcript = available_transcripts[0]['transcript']
-                        print(f"  Only one transcript available, auto-selecting: {available_transcripts[0]['language_code']}")
+                        print(f"  只有一种转录可用，自动选择: {available_transcripts[0]['language_code']}")
                     else:
                         # Multiple transcripts available, let user choose
-                        print(f"\n  Multiple transcript languages detected, please choose:")
+                        print(f"\n  检测到多种转录语言，请选择:")
                         for i, trans_info in enumerate(available_transcripts, 1):
-                            status = "auto-generated" if trans_info['is_generated'] else "manual captions"
+                            status = "自动生成" if trans_info['is_generated'] else "手动字幕"
                             print(f"    {i}. {trans_info['language_code']} - {trans_info['language_name']} ({status})")
                         
                         while True:
                             try:
-                                choice = input(f"  Please select transcript language (1-{len(available_transcripts)}), or press Enter to use first: ").strip()
+                                choice = input(f"  请选择转录语言 (1-{len(available_transcripts)}), 或按回车使用第一个: ").strip()
                                 
                                 if not choice:
                                     # Default to first option
                                     selected_index = 0
-                                    print(f"  Using default selection: {available_transcripts[0]['language_code']}")
+                                    print(f"  使用默认选择: {available_transcripts[0]['language_code']}")
                                     break
                                 else:
                                     selected_index = int(choice) - 1
                                     if 0 <= selected_index < len(available_transcripts):
-                                        print(f"  Selected: {available_transcripts[selected_index]['language_code']} - {available_transcripts[selected_index]['language_name']}")
+                                        print(f"  已选择: {available_transcripts[selected_index]['language_code']} - {available_transcripts[selected_index]['language_name']}")
                                         break
                                     else:
-                                        print(f"  Please enter a number between 1 and {len(available_transcripts)}")
+                                        print(f"  请输入 1 到 {len(available_transcripts)} 之间的数字")
                                         continue
                             except ValueError:
-                                print(f"  Please enter a valid number (1-{len(available_transcripts)})")
+                                print(f"  请输入有效的数字 (1-{len(available_transcripts)})")
                                 continue
                         
                         selected_transcript = available_transcripts[selected_index]['transcript']
                     
                     # Fetch the selected transcript
                     try:
-                        print(f"  Fetching transcript: {selected_transcript.language_code}")
+                        print(f"  正在获取转录: {selected_transcript.language_code}")
                         transcript_data = selected_transcript.fetch()
                         
                         if not transcript_data:
-                            print(f"    No data returned for {selected_transcript.language_code}")
+                            print(f"    {selected_transcript.language_code}未返回数据")
                             # If selected transcript fails, try others
-                            print("  Trying other available transcripts...")
+                            print("  尝试其他可用转录...")
                             for trans_info in available_transcripts:
                                 if trans_info['transcript'] == selected_transcript:
                                     continue
                                 try:
-                                    print(f"  Fallback transcript: {trans_info['language_code']}")
+                                    print(f"  备用转录: {trans_info['language_code']}")
                                     transcript_data = trans_info['transcript'].fetch()
                                     if transcript_data:
-                                        print(f"  Fallback transcript success: {trans_info['language_code']}")
+                                        print(f"  备用转录成功: {trans_info['language_code']}")
                                         break
                                 except Exception as e:
-                                    print(f"    Fallback transcript {trans_info['language_code']} failed: {e}")
+                                    print(f"    备用转录{trans_info['language_code']}失败: {e}")
                                     continue
                         
                         if not transcript_data:
-                            print(f"  Attempt {attempt + 1}: All transcripts failed")
+                            print(f"  第{attempt + 1}次尝试: 所有转录都失败")
                             continue
                         
                         # Extract text - handle different possible formats
@@ -650,70 +654,70 @@ class TranscriptExtractor:
                                 # Object with text attribute
                                 text_parts.append(entry.__dict__['text'])
                             else:
-                                print(f"    Warning: Unknown segment format: {type(entry)}")
+                                print(f"    警告: 未知片段格式: {type(entry)}")
                         
                         if text_parts:
                             full_text = " ".join(text_parts).strip()
                             if full_text:
-                                print(f"✅ YouTube transcript API success! ({len(full_text)} characters)")
+                                print(f"✅ YouTube转录API成功! (共{len(full_text)}个字符)")
                                 return full_text
                             else:
-                                print(f"    Empty text after joining")
+                                print(f"    合并后为空")
                         else:
-                            print(f"    No text parts extracted")
+                            print(f"    未提取到文本")
                         
                     except Exception as e3:
                         error_msg = str(e3)
-                        print(f"    Failed to fetch selected transcript: {error_msg}")
+                        print(f"    获取选中转录失败: {error_msg}")
                         
                         # Check for specific error types
                         if "no element found" in error_msg.lower():
-                            print(f"    This appears to be an XML parsing error, possibly temporary")
+                            print(f"    这可能是XML解析错误，可能是临时问题")
                         elif "not available" in error_msg.lower():
-                            print(f"    This transcript is not available")
+                            print(f"    该转录不可用")
                         else:
-                            print(f"    Unexpected error type: {type(e3)}")
+                            print(f"    未知错误类型: {type(e3)}")
                     
                     # If we get here, selected transcript failed
-                    print(f"  Attempt {attempt + 1} failed")
+                    print(f"  第{attempt + 1}次尝试失败")
                     
                 except Exception as e2:
                     error_msg = str(e2)
-                    print(f"  Failed to list transcripts (attempt {attempt + 1}): {error_msg}")
+                    print(f"  第{attempt + 1}次获取转录列表失败: {error_msg}")
                     
                     # Check for specific error types
                     if "no element found" in error_msg.lower():
-                        print(f"    XML parsing error - this might be temporary, retrying...")
+                        print(f"    XML解析错误 - 可能是临时问题，重试中...")
                         continue
                     elif "not available" in error_msg.lower() or "disabled" in error_msg.lower():
-                        print(f"    Video transcripts are disabled or unavailable")
+                        print(f"    视频转录被禁用或不可用")
                         break  # No point retrying
                     else:
-                        print(f"    Unexpected error: {type(e2)}")
+                        print(f"    未知错误: {type(e2)}")
                         if attempt == max_retries - 1:  # Last attempt
                             import traceback
-                            print(f"    Full traceback:")
+                            print(f"    完整错误信息:")
                             traceback.print_exc()
                         continue
             
-            print("❌ YouTube transcript API failed, trying audio download fallback...")
+            print("❌ YouTube转录API失败，尝试音频下载备用方案...")
             # Fallback to audio download if transcript extraction failed
             if video_url and YT_DLP_AVAILABLE:
                 return self.audio_download_fallback(video_url, title)
             else:
-                print("❌ Audio download fallback not available")
+                print("❌ 音频下载备用方案不可用")
                 return None
             
         except Exception as e:
-            print(f"Error extracting YouTube transcript: {e}")
-            print("🔄 Trying audio download fallback...")
+            print(f"提取YouTube转录出错: {e}")
+            print("🔄 尝试音频下载备用方案...")
             if video_url and YT_DLP_AVAILABLE:
                 return self.audio_download_fallback(video_url, title)
             return None
     
     def audio_download_fallback(self, video_url: str, title: str) -> Optional[str]:
         """Audio download and transcription fallback solution"""
-        print("🎵 Starting audio download fallback solution...")
+        print("🎵 开始音频下载备用方案...")
         
         # Download audio
         audio_file = self.download_youtube_audio(video_url, title)
@@ -752,19 +756,19 @@ class SummaryGenerator:
             try:
                 genai.configure(api_key=self.api_key)
                 self.gemini_client = genai
-                print("✅ Gemini API initialized successfully for YouTube!")
+                print("✅ Gemini API已成功初始化用于YouTube！")
             except Exception as e:
-                print(f"⚠️  Error initializing Gemini client: {e}")
+                print(f"⚠️  初始化Gemini客户端出错: {e}")
                 self.gemini_client = None
         else:
             if not self.api_key:
-                print("Please add your Gemini API key to the .env file")
+                print("请将Gemini API密钥添加到.env文件中")
             self.gemini_client = None
     
     def generate_summary(self, transcript: str, title: str) -> Optional[str]:
         """Generate summary from transcript using new Gemini API"""
         if not self.gemini_client:
-            print("Gemini API not available or API key not configured")
+            print("Gemini API不可用或API密钥未配置")
             return None
         
         try:
@@ -786,7 +790,7 @@ class SummaryGenerator:
             {transcript}
             """
             
-            print("Generating summary...")
+            print("正在生成摘要...")
             response = self.gemini_client.GenerativeModel("gemini-2.5-flash-preview-05-20").generate_content(prompt)
             
             # Handle the response properly
@@ -795,17 +799,17 @@ class SummaryGenerator:
             elif hasattr(response, 'candidates') and response.candidates:
                 return response.candidates[0].content.parts[0].text
             else:
-                print("Unexpected response format from Gemini API")
+                print("Gemini API响应格式异常")
                 return None
             
         except Exception as e:
-            print(f"Error generating summary: {e}")
+            print(f"生成摘要出错: {e}")
             return None
     
     def translate_to_chinese(self, text: str) -> Optional[str]:
         """Translate text to Chinese using Gemini API"""
         if not self.gemini_client:
-            print("Gemini API not available or API key not configured")
+            print("Gemini API不可用或API密钥未配置")
             return None
         
         try:
@@ -819,11 +823,11 @@ class SummaryGenerator:
             elif hasattr(response, 'candidates') and response.candidates:
                 return response.candidates[0].content.parts[0].text
             else:
-                print("Unexpected response format from Gemini API")
+                print("Gemini API响应格式异常")
                 return None
             
         except Exception as e:
-            print(f"Error translating to Chinese: {e}")
+            print(f"翻译为中文出错: {e}")
             return None
     
     def save_summary(self, summary: str, title: str, output_dir: Path) -> str:
@@ -853,28 +857,28 @@ class Podnet:
     
     def run(self):
         """Main application loop for YouTube"""
-        print("🎥 Welcome to Podnet - Your YouTube Podcast Assistant Tool!")
+        print("🎥 欢迎使用 Podnet - 您的 YouTube 播客助手工具！")
         print("=" * 50)
         
         while True:
             # First ask what type of information the user wants to provide
-            print("\nWhat type of information are you interested in?")
-            print("- name: podcast/channel name")
-            print("- link: YouTube video or channel link") 
-            print("- script: direct transcript content")
-            print("\nExamples:")
-            print("  name: lex fridman, or lexfridman (the @username of the channel)")
-            print("  link: https://www.youtube.com/watch?v=qCbfTN-caFI (for a single video)")
-            print("  script: put text content in scripts/script.txt")
+            print("\n您感兴趣的信息类型是？")
+            print("- name: 播客/频道名称")
+            print("- link: YouTube 视频或频道链接") 
+            print("- script: 直接提供转录文本内容")
+            print("\n示例：")
+            print("  name: lex fridman, or lexfridman (频道的@username)")
+            print("  link: https://www.youtube.com/watch?v=qCbfTN-caFI (单视频链接)")
+            print("  script: 将文本内容放入 scripts/script.txt")
             
-            content_type = input("\nChoose type (name/link/script) or 'quit' to exit: ").strip().lower()
+            content_type = input("\n请选择类型 (name/link/script) 或输入 'quit' 退出: ").strip().lower()
             
             if content_type in ['quit', 'exit', 'q']:
-                print("🔙 Back to main menu")
+                print("🔙 返回主菜单")
                 break
             
             if content_type not in ['name', 'link', 'script']:
-                print("Please choose 'name', 'link', 'script', or 'quit'.")
+                print("请选择 'name'、'link'、'script' 或 'quit'。")
                 continue
             
             # Handle script input
@@ -883,9 +887,9 @@ class Podnet:
                 script_file_path = Path("scripts/script.txt")
                 
                 if not script_file_path.exists():
-                    print("❌ Script file not found!")
-                    print("Please create a file at: scripts/script.txt")
-                    print("Put your transcript content in that file and try again.")
+                    print("❌ 未找到脚本文件！")
+                    print("请在 scripts/script.txt 路径下创建文件")
+                    print("请将您的转录内容放入该文件后重试。")
                     continue
                 
                 try:
@@ -893,19 +897,19 @@ class Podnet:
                         transcript = f.read().strip()
                     
                     if not transcript:
-                        print("❌ The script file is empty.")
-                        print("Please add your transcript content to scripts/script.txt")
+                        print("❌ 脚本文件为空。")
+                        print("请将您的转录内容添加到 scripts/script.txt")
                         continue
                     
-                    print(f"✅ Successfully loaded script from scripts/script.txt ({len(transcript)} characters)")
+                    print(f"✅ 成功加载脚本，来自 scripts/script.txt（{len(transcript)} 个字符）")
                     
                 except Exception as e:
-                    print(f"❌ Error reading script file: {e}")
+                    print(f"❌ 读取脚本文件出错: {e}")
                     continue
                 
                 if len(transcript) < 50:
-                    print("⚠️  The transcript seems very short. Are you sure this is complete?")
-                    confirm = input("Continue anyway? (y/n): ").strip().lower()
+                    print("⚠️  转录内容似乎很短，您确定内容完整吗？")
+                    confirm = input("仍然继续？(y/n): ").strip().lower()
                     if confirm not in ['y', 'yes']:
                         continue
                 
@@ -918,7 +922,7 @@ class Podnet:
                     'platform': 'script'
                 }]
                 
-                print(f"✅ Script content received ({len(transcript)} characters)")
+                print(f"✅ 已收到脚本内容（{len(transcript)} 个字符）")
                 
                 # Skip to action selection
                 want_transcripts = True  # Always save transcript for script
@@ -926,10 +930,10 @@ class Podnet:
             
             else:
                 # Handle name/link input (existing logic)
-                user_input = input(f"\nPlease enter the {content_type}: ").strip()
+                user_input = input(f"\n请输入 {content_type}: ").strip()
                 
                 if not user_input:
-                    print(f"Please enter a {content_type}.")
+                    print(f"请输入一个 {content_type}。")
                     continue
                 
                 # Check if input is a YouTube link
@@ -955,9 +959,9 @@ class Podnet:
                                 'published_date': 'Unknown',
                                 'platform': 'youtube'
                             }]
-                            print(f"🎥 Single video detected: {user_input}")
+                            print(f"🎥 检测到单个视频链接: {user_input}")
                         else:
-                            print("❌ Invalid YouTube video link format.")
+                            print("❌ YouTube 视频链接格式无效。")
                             continue
                     elif "/@" in user_input and "/videos" in user_input:
                         # Channel videos link
@@ -966,15 +970,15 @@ class Podnet:
                         channel_match = re.search(r'/@([^/]+)', user_input)
                         if channel_match:
                             channel_name = channel_match.group(1)
-                            print(f"🎥 Channel link detected: @{channel_name}")
+                            print(f"🎥 检测到频道链接: @{channel_name}")
                         else:
-                            print("❌ Invalid YouTube channel link format.")
+                            print("❌ YouTube 频道链接格式无效。")
                             continue
                     else:
-                        print("❌ Unsupported YouTube link format. Please use video links (youtube.com/watch?v=...) or channel videos links (youtube.com/@channel/videos)")
+                        print("❌ 不支持的 YouTube 链接格式。请使用视频链接 (youtube.com/watch?v=...) 或频道视频链接 (youtube.com/@channel/videos)")
                         continue
                 elif content_type == 'link':
-                    print("❌ Please provide a valid YouTube link.")
+                    print("❌ 请提供有效的 YouTube 链接。")
                     continue
                 else:
                     # Regular name input - use existing logic
@@ -983,45 +987,45 @@ class Podnet:
                 if is_single_video:
                     # Skip episode selection for single video
                     selected_episodes = episodes
-                    print(f"\n✅ Processing single video")
+                    print(f"\n✅ 正在处理单个视频")
                 else:
                     # Ask how many recent episodes the user wants (for name or channel link)
                     while True:
                         try:
-                            num_episodes = input("How many recent podcasts do you want to see? (default: 5): ").strip()
+                            num_episodes = input("您想查看最近多少期播客？(默认: 5): ").strip()
                             if not num_episodes:
                                 num_episodes = 5
                             else:
                                 num_episodes = int(num_episodes)
                             
                             if num_episodes <= 0:
-                                print("Please enter a positive number.")
+                                print("请输入一个正整数。")
                                 continue
                             elif num_episodes > 20:
-                                print("Maximum 20 episodes allowed.")
+                                print("最多只能选择 20 期。")
                                 continue
                             else:
                                 break
                         except ValueError:
-                            print("Please enter a valid number.")
+                            print("请输入有效的数字。")
                             continue
                     
                     # Search for episodes on YouTube
-                    print(f"\n🔍 Searching YouTube for '{channel_name}'...")
+                    print(f"\n🔍 正在 YouTube 上搜索 '{channel_name}' ...")
                     
                     episodes = self.searcher.search_youtube_podcast(channel_name, num_episodes)
                     
                     if not episodes:
-                        print("❌ No episodes found. Please try a different search term.")
+                        print("❌ 未找到相关节目。请尝试其他搜索词。")
                         continue
                     
                     # Display episodes with platform information
-                    print(f"\n📋 Found {len(episodes)} recent episodes:")
+                    print(f"\n📋 找到 {len(episodes)} 期最新节目：")
                     for i, episode in enumerate(episodes, 1):
                         print(f"{i}. 🎥 [YouTube] '{episode['title']}' - {episode['published_date']}")
                     
                     # Get episode selection FIRST
-                    episode_selection = input(f"\nWhich episodes are you interested in? (1-{len(episodes)}, e.g., '1,3,5' or 'all'): ").strip()
+                    episode_selection = input(f"\n您对哪些节目感兴趣？(1-{len(episodes)}，如 '1,3,5' 或 'all'): ").strip()
                     
                     if episode_selection.lower() == 'all':
                         selected_episodes = episodes
@@ -1030,25 +1034,25 @@ class Podnet:
                             selected_indices = [int(x.strip()) - 1 for x in episode_selection.split(',')]
                             selected_episodes = [episodes[i] for i in selected_indices if 0 <= i < len(episodes)]
                         except (ValueError, IndexError):
-                            print("Invalid episode selection. Please try again.")
+                            print("节目选择无效，请重试。")
                             continue
                     
                     if not selected_episodes:
-                        print("No valid episodes selected.")
+                        print("未选择有效的节目。")
                         continue
                     
-                    print(f"\n✅ Selected {len(selected_episodes)} episode(s)")
+                    print(f"\n✅ 已选择 {len(selected_episodes)} 期节目")
                 
                 # THEN ask what to do with selected episodes (only for name/link)
-                print("\nWhat would you like to do with the selected episodes?")
-                print("1. Get transcripts of the episodes")
-                print("2. Get summaries of the episodes")
-                print("3. Get both transcripts and summaries")
+                print("\n您希望对所选节目进行什么操作？")
+                print("1. 获取节目的转录文本")
+                print("2. 获取节目的摘要")
+                print("3. 获取转录文本和摘要")
                 
-                action = input("Your choice (1, 2, or 3): ").strip()
+                action = input("请选择 (1, 2, 或 3): ").strip()
                 
                 if action not in ['1', '2', '3']:
-                    print("Please select a valid option (1, 2, or 3)")
+                    print("请选择有效的选项 (1, 2, 或 3)")
                     continue
                 
                 # Parse action
@@ -1056,21 +1060,21 @@ class Podnet:
                 want_summaries = action in ['2', '3']
             
             # Ask for language preference (common for all types)
-            language = input("\nWhat language would you like the output to be? (en/ch): ").strip().lower()
+            language = input("\n您希望输出什么语言？(en/ch): ").strip().lower()
             want_chinese = language == 'ch'
             
             # Process selected episodes
-            print(f"\n🚀 Processing {len(selected_episodes)} episode(s)...")
+            print(f"\n🚀 正在处理 {len(selected_episodes)} 期节目 ...")
             
             for episode in selected_episodes:
-                print(f"\n📝 Processing {f'📜 [Script]' if episode['platform'] == 'script' else '🎥 [YouTube]'}: {episode['title']}")
+                print(f"\n📝 正在处理 {f'📜 [脚本]' if episode['platform'] == 'script' else '🎥 [YouTube]'}: {episode['title']}")
                 
                 transcript_content = None
                 
                 if episode['platform'] == 'script':
                     # Use the script content directly
                     transcript_content = transcript
-                    print("✅ Script content loaded successfully!")
+                    print("✅ 脚本内容加载成功！")
                 else:
                     # Extract transcript from YouTube (existing logic)
                     video_id = episode.get('video_id')
@@ -1081,12 +1085,12 @@ class Podnet:
                             episode['title']
                         )
                         if transcript_content:
-                            print("✅ YouTube transcript extracted successfully!")
+                            print("✅ 成功提取 YouTube 转录文本！")
                     
                     # If no transcript available, create placeholder
                     if not transcript_content and (want_transcripts or want_summaries):
-                        print("⚠️  No YouTube transcript available for this video")
-                        print("   This video may not have auto-generated captions")
+                        print("⚠️  此视频没有可用的 YouTube 转录文本")
+                        print("   该视频可能没有自动生成的字幕")
                         # Create a placeholder transcript for YouTube videos without captions
                         transcript_content = f"""# {episode['title']}
 
@@ -1104,16 +1108,16 @@ You can:
 2. Check if captions are available manually on YouTube
 3. Request the creator to add captions
 """
-                        print("✅ Created episode info (no transcript available)")
+                        print("✅ 已创建节目信息（无转录文本）")
                 
                 if not transcript_content:
-                    print("❌ Could not extract transcript for this episode")
+                    print("❌ 无法提取该节目的转录文本")
                     continue
                 
                 # Save transcript if requested
                 if want_transcripts and transcript_content:
                     transcript_path = self.extractor.save_transcript(transcript_content, episode['title'])
-                    print(f"💾 Transcript saved to: {transcript_path}")
+                    print(f"💾 转录文本已保存至: {transcript_path}")
                 
                 # Generate and save summary if requested
                 if want_summaries and transcript_content:
@@ -1124,62 +1128,62 @@ You can:
                             # Translate summary to Chinese if requested
                             final_summary = summary
                             if want_chinese:
-                                print("🔄 Translating summary to Chinese...")
+                                print("🔄 正在将摘要翻译为中文 ...")
                                 translated_summary = self.summarizer.translate_to_chinese(summary)
                                 if translated_summary:
                                     final_summary = translated_summary
-                                    print("✅ Summary translated to Chinese!")
+                                    print("✅ 摘要已翻译为中文！")
                                 else:
-                                    print("⚠️  Translation failed, using original summary")
+                                    print("⚠️  翻译失败，使用原始摘要")
                             
                             summary_path = self.summarizer.save_summary(
                                 final_summary, 
                                 episode['title'], 
                                 self.extractor.output_dir
                             )
-                            print(f"📄 Summary saved to: {summary_path}")
+                            print(f"📄 摘要已保存至: {summary_path}")
                         else:
-                            print("❌ Could not generate summary")
+                            print("❌ 无法生成摘要")
                     else:
-                        print("⚠️  Skipping summary - no transcript content available")
+                        print("⚠️  跳过摘要 - 无有效转录内容")
                 
-                print("✅ Episode processing complete!")
+                print("✅ 节目处理完成！")
             
-            print(f"\n🎉 All done! Files saved in: {self.extractor.output_dir}")
+            print(f"\n🎉 全部完成！文件已保存至: {self.extractor.output_dir}")
             
             # Ask about visualization if any content was processed
             if selected_episodes:
                 self.ask_for_visualization(selected_episodes, want_chinese)
             
             # Ask if the user wants to continue
-            continue_choice = input("\nstay in youtube? (y/n): ").strip().lower()
+            continue_choice = input("\n继续在 YouTube 模式下吗？(y/n): ").strip().lower()
             if continue_choice not in ['y', 'yes', 'yes']:
-                print("🔙 Back to main menu")
+                print("🔙 返回主菜单")
                 break
     
     def ask_for_visualization(self, processed_episodes: List[Dict], want_chinese: bool):
         """
-        Ask user if they want to generate visual stories
+        询问用户是否要生成可视化故事
         
         Args:
-            processed_episodes: List of processed episodes
-            want_chinese: Whether to use Chinese
+            processed_episodes: 已处理的剧集列表
+            want_chinese: 是否使用中文
         """
         if not processed_episodes:
             return
         
-        print(f"\n🎨 Visual Story Generation:")
-        visualize_choice = input("Visualize the story? (y/n): ").strip().lower()
+        print(f"\n🎨 可视化故事生成:")
+        visualize_choice = input("生成可视化故事? (y/n): ").strip().lower()
         
-        if visualize_choice not in ['y', 'yes']:
+        if visualize_choice not in ['y', 'yes', '是']:
             return
         
         # Ask whether to use transcript or summary
-        print("📄 Content source:")
-        content_choice = input("Visualize based on transcript or summary? (t/s): ").strip().lower()
+        print("📄 内容来源:")
+        content_choice = input("基于转录文本还是摘要生成可视化? (t/s): ").strip().lower()
         
         if content_choice not in ['t', 's']:
-            print("Invalid choice. Skipping visualization.")
+            print("选择无效，跳过可视化生成。")
             return
         
         # Import visual module based on language
@@ -1190,7 +1194,7 @@ You can:
                 from .visual_en import generate_visual_story
         except ImportError:
             visual_module = "visual_ch.py" if want_chinese else "visual_en.py"
-            print(f"❌ Visual module not found. Please ensure {visual_module} is in the echomind folder.")
+            print(f"❌ 未找到可视化模块。请确保{visual_module}在podlens文件夹中。")
             return
         
         # Process each episode
@@ -1202,7 +1206,7 @@ You can:
             else:
                 title = episode['title']
             
-            print(f"\n[{i}/{len(processed_episodes)}] Generating visual story: {title}")
+            print(f"\n[{i}/{len(processed_episodes)}] 正在生成可视化故事: {title}")
             
             # Build file paths - using the same naming pattern as save functions
             # Use the same sanitization logic as save_transcript and save_summary
@@ -1212,25 +1216,115 @@ You can:
             if content_choice == 't':
                 # Use transcript
                 source_filename = f"Transcript_{safe_title}.md"
-                content_type = "transcript"
+                content_type = "转录文本"
             else:
                 # Use summary
                 source_filename = f"Summary_{safe_title}.md"
-                content_type = "summary"
+                content_type = "摘要"
             
             source_filepath = self.extractor.output_dir / source_filename
             
             if not source_filepath.exists():
-                print(f"❌ {content_type.capitalize()} file not found: {source_filename}")
+                print(f"❌ {content_type}文件未找到: {source_filename}")
                 continue
             
             # Generate visual story
             if generate_visual_story(str(source_filepath)):
                 visual_success_count += 1
-                print(f"✅ Visual story generated successfully!")
+                print(f"✅ 可视化故事生成成功!")
             else:
-                print(f"❌ Failed to generate visual story")
+                print(f"❌ 可视化故事生成失败")
         
-        print(f"\n📊 Visual story generation complete! Success: {visual_success_count}/{len(processed_episodes)}")
+        print(f"\n📊 可视化故事生成完成! 成功: {visual_success_count}/{len(processed_episodes)}")
         if visual_success_count > 0:
-            print(f"📁 Visual stories saved in: {self.extractor.output_dir.absolute()}")
+            print(f"📁 可视化故事保存在: {self.extractor.output_dir.absolute()}")
+
+
+def main():
+    """Main function"""
+    print("🎧🎥 播客转录与摘要工具")
+    print("=" * 50)
+    print("支持 Apple Podcast 和 YouTube 平台")
+    print("=" * 50)
+    
+    while True:
+        # Let the user choose the information source
+        print("\n📡 请选择信息来源：")
+        print("1. Apple Podcast")
+        print("2. YouTube")
+        print("0. 退出")
+        
+        choice = input("\n请输入您的选择 (1/2/0): ").strip()
+        
+        if choice == '0':
+            print("👋 再见！")
+            break
+        elif choice == '1':
+            # Apple Podcast processing logic
+            print("\n🎧 您选择了 Apple Podcast")
+            print("=" * 40)
+            apple_main()
+        elif choice == '2':
+            # YouTube processing logic
+            print("\n🎥 您选择了 YouTube")
+            print("=" * 40)
+            youtube_main()
+        else:
+            print("❌ 选择无效，请输入 1、2 或 0")
+
+
+def apple_main():
+    """Apple Podcast main processing function"""
+    explorer = ApplePodcastExplorer()
+    
+    while True:
+        # Get user input
+        podcast_name = input("\n请输入您要搜索的播客频道名称（或直接回车返回主菜单）: ").strip()
+        
+        if not podcast_name:
+            print("🔙 返回主菜单")
+            break
+        
+        # Search for channels
+        channels = explorer.search_podcast_channel(podcast_name)
+        
+        # Display channels and let user select
+        selected_index = explorer.display_channels(channels)
+        
+        if selected_index == -1:
+            continue
+        
+        selected_channel = channels[selected_index]
+        
+        # Check if RSS feed URL is available
+        if not selected_channel['feed_url']:
+            print("❌ 该频道没有可用的 RSS 订阅链接")
+            continue
+        
+        # Ask user how many episodes to preview
+        episode_limit_input = input("请选择要预览的节目数量（默认 10）: ").strip()
+        if episode_limit_input:
+            try:
+                episode_limit = int(episode_limit_input)
+                episode_limit = max(1, min(episode_limit, 50))  # Limit between 1-50
+            except ValueError:
+                print("输入无效，使用默认值 10")
+                episode_limit = 10
+        else:
+            episode_limit = 10
+        
+        episodes = explorer.get_recent_episodes(selected_channel['feed_url'], episode_limit)
+        
+        # Display episodes
+        explorer.display_episodes(episodes, selected_channel['name'])
+        
+        # Ask if user wants to download
+        explorer.download_episodes(episodes, selected_channel['name'])
+        
+        # Ask if user wants to continue
+        continue_search = input("\n继续搜索其他频道？(y/n): ").strip().lower()
+        if continue_search not in ['y', 'yes']:
+            print("🔙 返回主菜单")
+            break
+
+

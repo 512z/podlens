@@ -1,12 +1,12 @@
-# 🎧 EchoMind - Intelligent Podcast & Youtube Transcription & Summary Tool
+# 🎧 PodLens - Intelligent Podcast & Youtube Transcription & Summary Tool
 
 ```
-  ██████╗ ██████╗██╗  ██╗ ██████╗ ███╗   ███╗██╗███╗   ██╗██████╗
-  ██╔════╝██╔════╝██║  ██║██╔═══██╗████╗ ████║██║████╗  ██║██╔══██╗
-  █████╗  ██║     ███████║██║   ██║██╔████╔██║██║██╔██╗ ██║██║  ██║
-  ██╔══╝  ██║     ██╔══██║██║   ██║██║╚██╔╝██║██║██║╚██╗██║██║  ██║
-  ███████╗╚██████╗██║  ██║╚██████╔╝██║ ╚═╝ ██║██║██║ ╚████║██████╔╝
-  ╚══════╝ ╚═════╝╚═╝  ╚═╝ ╚═════╝ ╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚═════╝
+  ██████╗  ██████╗ ██████╗ ██╗     ███████╗███╗   ██╗███████╗
+  ██╔══██╗██╔═══██╗██╔══██╗██║     ██╔════╝████╗  ██║██╔════╝
+  ██████╔╝██║   ██║██║  ██║██║     █████╗  ██╔██╗ ██║███████╗
+  ██╔═══╝ ██║   ██║██║  ██║██║     ██╔══╝  ██║╚██╗██║╚════██║
+  ██║     ╚██████╔╝██████╔╝███████╗███████╗██║ ╚████║███████║
+  ╚═╝      ╚═════╝ ╚═════╝ ╚══════╝╚══════╝╚═╝  ╚═══╝╚══════╝
 ```
 
 [中文版 README](README_zh.md) | **English README**
@@ -33,7 +33,7 @@ A cost-free & powerful podcast transcription and summarization tool that support
 ## 📦 Installation
 
 ```bash
-pip install echomind
+pip install podlens
 ```
 
 ## 🔧 Configuration
@@ -64,14 +64,14 @@ GEMINI_API_KEY=your_gemini_api_key_here
 
 ### English Version
 ```bash
-echomind
+podlens
 ```
 
 ### Chinese Version  
 ```bash
-echomind-zh
+podlens-zh
 # or
-echomind-ch
+podlens-ch
 ```
 
 ### Interactive Interface:
@@ -93,9 +93,9 @@ Please enter your choice (1/2/0):
 
 | Command | Description |
 |---------|-------------|
-| `echomind` | Launch default interface (English) |
-| `echomind-en` | Launch English interface |
-| `echomind-zh` or `echomind-ch` | Launch Chinese interface |
+| `podlens` | Launch default interface (English) |
+| `podlens-en` | Launch English interface |
+| `podlens-zh` or `podlens-ch` | Launch Chinese interface |
 
 
 ## 📋 Workflow Example
@@ -159,7 +159,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgements
 
-This project stands on the shoulders of giants. We are deeply grateful to the following open source projects, technologies, and communities that made EchoMind possible:
+This project stands on the shoulders of giants. We are deeply grateful to the following open source projects, technologies, and communities that made PodLens possible:
 
 ### Core AI Technologies
 - **[OpenAI Whisper](https://github.com/openai/whisper)** - The foundational automatic speech recognition model that revolutionized audio transcription

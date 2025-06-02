@@ -18,116 +18,115 @@ import google.generativeai as genai
 # Load .env file
 load_dotenv()
 
-# Whisper transcription support
-# Whisper 转录支持
+# Try to import MLX Whisper
 try:
     import mlx_whisper
     import mlx.core as mx
     MLX_WHISPER_AVAILABLE = True
-    # 检查 MLX 设备可用性
+    # Check MLX device availability
     MLX_DEVICE = mx.default_device()
-    # print(f"🎯 MLX Whisper 可用，使用设备: {MLX_DEVICE}")
+    # print(f"🎯 MLX Whisper available, using device: {MLX_DEVICE}")
 except ImportError:
     MLX_WHISPER_AVAILABLE = False
-    # print("⚠️  MLX Whisper 不可用")
+    # print("⚠️  MLX Whisper not available")
 
-# Groq API 极速转录
+# Groq API ultra-fast transcription
 try:
     from groq import Groq
     GROQ_API_KEY = os.getenv('GROQ_API_KEY')
     GROQ_AVAILABLE = bool(GROQ_API_KEY)
     # if GROQ_AVAILABLE:
-    #     print(f"🚀 Groq API 可用，已启用超快转录")
+    #     print(f"🚀 Groq API available, ultra-fast transcription enabled")
     # else:
-    #     print("⚠️  未设置 Groq API 密钥")
+    #     print("⚠️  Groq API key not set")
 except ImportError:
     GROQ_AVAILABLE = False
-    # print("⚠️  未安装 Groq SDK")
+    # print("⚠️  Groq SDK not installed")
 
-# Gemini API 摘要支持
+# Gemini API summary support
 try:
     GEMINI_AVAILABLE = True
 except ImportError:
     GEMINI_AVAILABLE = False
 
-# 检查转录功能可用性
+# Check transcription feature availability
 TRANSCRIPTION_AVAILABLE = MLX_WHISPER_AVAILABLE or GROQ_AVAILABLE
 
 
 class ApplePodcastExplorer:
-    """Apple播客频道探索工具"""
+    """Tool for exploring Apple podcast channels"""
     
     def __init__(self):
-        """初始化HTTP会话"""
+        """Initialize HTTP session"""
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
         })
         
-        # 创建媒体文件夹
+        # Create media folder
         self.media_dir = Path("media")
         self.media_dir.mkdir(exist_ok=True)
         
-        # 创建outputs文件夹用于保存转录文件
+        # Create outputs folder for saving transcript files
         self.transcript_dir = Path("outputs")
         self.transcript_dir.mkdir(exist_ok=True)
         
-        # 初始化MLX Whisper模型 - 始终使用medium模型
+        # Initialize MLX Whisper model - always use medium model
         self.whisper_model_name = 'mlx-community/whisper-medium'
         
-        # Groq客户端初始化
+        # Groq client initialization
         if GROQ_AVAILABLE:
             self.groq_client = Groq(api_key=GROQ_API_KEY)
         else:
             self.groq_client = None
             
-        # Gemini客户端初始化
+        # Gemini client initialization
         self.api_key = os.getenv('GEMINI_API_KEY')
         if GEMINI_AVAILABLE and self.api_key:
             try:
                 genai.configure(api_key=self.api_key)
                 self.gemini_client = genai
             except Exception as e:
-                print(f"⚠️  Gemini客户端初始化失败: {e}")
+                print(f"⚠️  Gemini client initialization failed: {e}")
                 self.gemini_client = None
         else:
             self.gemini_client = None
     
     def load_whisper_model(self):
         """
-        设置MLX Whisper模型 - 始终使用medium模型
+        Set MLX Whisper model - always use medium model
         """
         if not MLX_WHISPER_AVAILABLE:
-            print("❌ MLX Whisper不可用")
+            print("❌ MLX Whisper not available")
             return False
         
         try:
-            print(f"📥 设置MLX Whisper模型: {self.whisper_model_name}")
-            print("ℹ️  首次使用会下载模型文件，请耐心等待...")
+            print(f"📥 Setting MLX Whisper model: {self.whisper_model_name}")
+            print("ℹ️  The model file will be downloaded on first use, please wait patiently...")
             return True
         except Exception as e:
-            print(f"❌ 设置MLX Whisper模型失败: {e}")
+            print(f"❌ Failed to set MLX Whisper model: {e}")
             return False
     
     def search_podcast_channel(self, podcast_name: str) -> List[Dict]:
         """
-        搜索播客频道
+        Search for podcast channels
         
         Args:
-            podcast_name: 播客频道名称
+            podcast_name: Podcast channel name
         
         Returns:
-            List[Dict]: 播客频道信息列表
+            List[Dict]: List of podcast channel information
         """
         try:
-            print(f"正在搜索播客频道: {podcast_name}")
+            print(f"Searching for podcast channel: {podcast_name}")
             
             search_url = "https://itunes.apple.com/search"
             params = {
                 'term': podcast_name,
                 'media': 'podcast',
                 'entity': 'podcast',
-                'limit': 10  # 获取多个匹配的播客频道
+                'limit': 10  # Get multiple matching podcast channels
             }
             
             response = self.session.get(search_url, params=params)
@@ -137,105 +136,105 @@ class ApplePodcastExplorer:
             channels = []
             for result in data.get('results', []):
                 channel = {
-                    'name': result.get('collectionName', '未知频道'),
-                    'artist': result.get('artistName', '未知作者'),
+                    'name': result.get('collectionName', 'Unknown Channel'),
+                    'artist': result.get('artistName', 'Unknown Author'),
                     'feed_url': result.get('feedUrl', ''),
                     'genre': ', '.join(result.get('genres', [])),
-                    'description': result.get('description', '无描述')
+                    'description': result.get('description', 'No description')
                 }
                 channels.append(channel)
             
             return channels
             
         except Exception as e:
-            print(f"搜索频道出错: {e}")
+            print(f"Error searching channel: {e}")
             return []
     
     def get_recent_episodes(self, feed_url: str, limit: int = 10) -> List[Dict]:
         """
-        获取播客频道的最新剧集
+        Get recent episodes of a podcast channel
         
         Args:
-            feed_url: RSS订阅地址
-            limit: 返回剧集数量上限
+            feed_url: RSS subscription URL
+            limit: Limit on the number of episodes returned
         
         Returns:
-            List[Dict]: 剧集信息列表
+            List[Dict]: List of episode information
         """
         try:
-            print("正在获取播客剧集...")
+            print("Getting podcast episodes...")
             
             feed = feedparser.parse(feed_url)
             episodes = []
             
             for entry in feed.entries[:limit]:
-                # 提取音频URL
+                # Extract audio URL
                 audio_url = None
                 for link in entry.get('links', []):
                     if link.get('type', '').startswith('audio/'):
                         audio_url = link.get('href')
                         break
                 
-                # 备用方法获取音频URL
+                # Alternative method to get audio URL
                 if not audio_url and hasattr(entry, 'enclosures'):
                     for enclosure in entry.enclosures:
                         if enclosure.type.startswith('audio/'):
                             audio_url = enclosure.href
                             break
                 
-                # 格式化发布日期
-                published_date = '未知日期'
+                # Format publish date
+                published_date = 'Unknown Date'
                 if hasattr(entry, 'published_parsed') and entry.published_parsed:
                     published_date = datetime(*entry.published_parsed[:6]).strftime('%Y-%m-%d')
                 elif hasattr(entry, 'published'):
                     published_date = entry.published
                 
-                # 获取时长（如有）
-                duration = '未知时长'
+                # Get duration (if available)
+                duration = 'Unknown Duration'
                 if hasattr(entry, 'itunes_duration'):
                     duration = entry.itunes_duration
                 
                 episode = {
-                    'title': entry.get('title', '未知标题'),
+                    'title': entry.get('title', 'Unknown Title'),
                     'audio_url': audio_url,
                     'published_date': published_date,
                     'duration': duration,
-                    'description': entry.get('summary', '无描述')[:200] + '...' if len(entry.get('summary', '')) > 200 else entry.get('summary', '无描述')
+                    'description': entry.get('summary', 'No description')[:200] + '...' if len(entry.get('summary', '')) > 200 else entry.get('summary', 'No description')
                 }
                 episodes.append(episode)
             
             return episodes
             
         except Exception as e:
-            print(f"获取剧集出错: {e}")
+            print(f"Error getting episodes: {e}")
             return []
     
     def display_channels(self, channels: List[Dict]) -> int:
         """
-        展示找到的频道并让用户选择
+        Display found channels and let the user choose
         
         Args:
-            channels: 频道列表
+            channels: List of channels
         
         Returns:
-            int: 用户选择的频道索引，-1为无效选择
+            int: Index of the channel selected by the user, -1 for invalid selection
         """
         if not channels:
-            print("❌ 未找到匹配的播客频道")
+            print("❌ No matching podcast channels found")
             return -1
         
-        print(f"\n共找到{len(channels)}个匹配的播客频道:")
+        print(f"\nFound {len(channels)} matching podcast channels:")
         print("=" * 60)
         
         for i, channel in enumerate(channels, 1):
             print(f"{i}. {channel['name']}")
-            print(f"   作者: {channel['artist']}")
-            print(f"   类型: {channel['genre']}")
-            print(f"   简介: {channel['description'][:100]}{'...' if len(channel['description']) > 100 else ''}")
+            print(f"   Author: {channel['artist']}")
+            print(f"   Genre: {channel['genre']}")
+            print(f"   Description: {channel['description'][:100]}{'...' if len(channel['description']) > 100 else ''}")
             print("-" * 60)
         
         try:
-            choice = input(f"\n请选择频道 (1-{len(channels)})，或回车退出: ").strip()
+            choice = input(f"\nPlease select a channel (1-{len(channels)}), or press Enter to exit: ").strip()
             if not choice:
                 return -1
             
@@ -243,106 +242,106 @@ class ApplePodcastExplorer:
             if 1 <= choice_num <= len(channels):
                 return choice_num - 1
             else:
-                print("❌ 选择无效")
+                print("❌ Invalid selection")
                 return -1
                 
         except ValueError:
-            print("❌ 请输入有效数字")
+            print("❌ Please enter a valid number")
             return -1
     
     def display_episodes(self, episodes: List[Dict], channel_name: str):
         """
-        展示剧集列表
+        Display episode list
         
         Args:
-            episodes: 剧集列表
-            channel_name: 频道名称
+            episodes: List of episodes
+            channel_name: Channel name
         """
         if not episodes:
-            print("❌ 该频道没有找到剧集")
+            print("❌ No episodes found for this channel")
             return
         
-        print(f"\n📻 {channel_name} - 最新{len(episodes)}期播客剧集:")
+        print(f"\n📻 {channel_name} - Most recent {len(episodes)} podcast episodes:")
         print("=" * 80)
         
         for i, episode in enumerate(episodes, 1):
             print(f"{i:2d}. {episode['title']}")
-            print(f"    📅 发布日期: {episode['published_date']}")
-            print(f"    ⏱️  时长: {episode['duration']}")
-            print(f"    📝 简介: {episode['description']}")
+            print(f"    📅 Publish Date: {episode['published_date']}")
+            print(f"    ⏱️  Duration: {episode['duration']}")
+            print(f"    📝 Description: {episode['description']}")
             if episode['audio_url']:
-                print(f"    🎵 音频链接: {episode['audio_url']}")
+                print(f"    🎵 Audio URL: {episode['audio_url']}")
             print("-" * 80)
     
     def parse_episode_selection(self, user_input: str, max_episodes: int) -> List[int]:
         """
-        解析用户的剧集选择输入
+        Parse user's episode selection input
         
         Args:
-            user_input: 用户输入（如"1-10", "3", "1,3,5"）
-            max_episodes: 剧集最大数量
+            user_input: User input (e.g., "1-10", "3", "1,3,5")
+            max_episodes: Maximum number of episodes
         
         Returns:
-            List[int]: 选中的剧集索引（0基）
+            List[int]: List of selected episode indices (0-based)
         """
         selected = set()
         user_input = user_input.strip()
         
-        # 逗号分割
+        # Split by comma
         parts = [part.strip() for part in user_input.split(',')]
         
         for part in parts:
             if '-' in part:
-                # 处理范围，如"1-10"
+                # Handle range, e.g. "1-10"
                 try:
                     start, end = part.split('-', 1)
                     start_num = int(start.strip())
                     end_num = int(end.strip())
                     
-                    # 保证范围有效
+                    # Ensure range is valid
                     start_num = max(1, min(start_num, max_episodes))
                     end_num = max(1, min(end_num, max_episodes))
                     
                     if start_num > end_num:
                         start_num, end_num = end_num, start_num
                     
-                    # 添加所有范围内数字（转为0基索引）
+                    # Add all numbers in range (convert to 0-based index)
                     for i in range(start_num, end_num + 1):
                         selected.add(i - 1)
                         
                 except ValueError:
-                    print(f"❌ 范围格式无效: {part}")
+                    print(f"❌ Invalid range format: {part}")
                     continue
             else:
-                # 处理单个数字
+                # Handle single number
                 try:
                     num = int(part)
                     if 1 <= num <= max_episodes:
-                        selected.add(num - 1)  # 转为0基索引
+                        selected.add(num - 1)  # Convert to 0-based index
                     else:
-                        print(f"❌ 数字超出范围: {num} (有效范围: 1-{max_episodes})")
+                        print(f"❌ Number out of range: {num} (valid range: 1-{max_episodes})")
                 except ValueError:
-                    print(f"❌ 无效数字: {part}")
+                    print(f"❌ Invalid number: {part}")
                     continue
         
         return sorted(list(selected))
     
     def sanitize_filename(self, filename: str) -> str:
         """
-        清理文件名，移除不安全字符
+        Clean filename, remove unsafe characters
         
         Args:
-            filename: 原始文件名
+            filename: Original filename
         
         Returns:
-            str: 清理后的文件名
+            str: Cleaned filename
         """
-        # 移除或替换不安全字符
+        # Remove or replace unsafe characters
         filename = re.sub(r'[<>:"/\\|?*]', '_', filename)
-        filename = re.sub(r'\s+', '_', filename)  # 空格替换为下划线
-        filename = filename.strip('._')  # 去除首尾点和下划线
+        filename = re.sub(r'\s+', '_', filename)  # Replace spaces with underscores
+        filename = filename.strip('._')  # Remove leading/trailing dots and underscores
         
-        # 限制文件名长度
+        # Limit filename length
         if len(filename) > 200:
             filename = filename[:200]
         
@@ -350,72 +349,72 @@ class ApplePodcastExplorer:
     
     def download_episode(self, episode: Dict, episode_num: int, channel_name: str) -> bool:
         """
-        下载单个剧集
+        Download a single episode
         
         Args:
-            episode: 剧集信息
-            episode_num: 剧集编号（1基）
-            channel_name: 频道名称
+            episode: Episode information
+            episode_num: Episode number (1-based)
+            channel_name: Channel name
         
         Returns:
-            bool: 下载是否成功
+            bool: Whether download was successful
         """
         if not episode['audio_url']:
-            print(f"❌ 剧集{episode_num}没有可用音频链接")
+            print(f"❌ No available audio URL for episode {episode_num}")
             return False
         
         try:
-            # 构建文件名
+            # Build filename
             safe_channel = self.sanitize_filename(channel_name)
             safe_title = self.sanitize_filename(episode['title'])
             filename = f"{safe_channel}_{episode_num:02d}_{safe_title}.mp3"
             filepath = self.media_dir / filename
             
-            # 检查文件是否已存在
+            # Check if file already exists
             if filepath.exists():
-                print(f"⚠️  文件已存在，跳过: {filename}")
+                print(f"⚠️  File already exists, skipping: {filename}")
                 return True
             
-            print(f"📥 正在下载第{episode_num}集: {episode['title']}")
+            print(f"📥 Downloading episode {episode_num}: {episode['title']}")
             
-            # 下载文件
+            # Download file
             response = self.session.get(episode['audio_url'], stream=True)
             response.raise_for_status()
             
-            # 获取文件大小
+            # Get file size
             total_size = int(response.headers.get('content-length', 0))
             
-            # 带进度条下载
+            # Download with progress bar
             with open(filepath, 'wb') as f:
                 if total_size > 0:
                     with tqdm(
                         total=total_size, 
                         unit='B', 
                         unit_scale=True, 
-                        desc=f"第{episode_num}集"
+                        desc=f"Episode {episode_num}"
                     ) as pbar:
                         for chunk in response.iter_content(chunk_size=8192):
                             if chunk:
                                 f.write(chunk)
                                 pbar.update(len(chunk))
                 else:
-                    # 没有文件大小信息时直接下载
+                    # If no file size info, just download
                     for chunk in response.iter_content(chunk_size=8192):
                         if chunk:
                             f.write(chunk)
             
-            print(f"✅ 下载完成: {filename}")
+            print(f"✅ Download complete: {filename}")
             return True
             
         except Exception as e:
-            print(f"❌ 下载第{episode_num}集失败: {e}")
-            # 下载失败时删除可能的不完整文件
+            print(f"❌ Failed to download episode {episode_num}: {e}")
+            # If download failed, delete possible incomplete file
             if filepath.exists():
                 filepath.unlink()
             return False
     
     def get_file_size_mb(self, filepath):
-        """获取文件大小（MB）"""
+        """Get file size (MB)"""
         if not os.path.exists(filepath):
             return 0
         size_bytes = os.path.getsize(filepath)
@@ -423,31 +422,31 @@ class ApplePodcastExplorer:
     
     def compress_audio_file(self, input_file: Path, output_file: Path) -> bool:
         """
-        压缩音频文件至Groq API限制以下
+        Compress audio file below Groq API limit
         
         Args:
-            input_file: 输入文件路径
-            output_file: 输出文件路径
+            input_file: Input file path
+            output_file: Output file path
         
         Returns:
-            bool: 压缩是否成功
+            bool: Whether compression was successful
         """
         try:
-            print(f"🔧 正在压缩音频文件: {input_file.name}")
-            print("📊 压缩参数: 16KHz单声道, 64kbps MP3")
+            print(f"🔧 Compressing audio file: {input_file.name}")
+            print("📊 Compression parameters: 16KHz mono, 64kbps MP3")
             
-            # ffmpeg压缩命令
+            # ffmpeg compression command
             cmd = [
                 'ffmpeg',
                 '-i', str(input_file),
-                '-ar', '16000',        # 降采样到16KHz
-                '-ac', '1',            # 单声道
-                '-b:a', '64k',         # 64kbps码率
-                '-y',                  # 覆盖输出文件
+                '-ar', '16000',        # Downsample to 16KHz
+                '-ac', '1',            # Mono
+                '-b:a', '64k',         # 64kbps bitrate
+                '-y',                  # Overwrite output file
                 str(output_file)
             ]
             
-            # 静默运行压缩
+            # Run compression (silent mode)
             result = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -455,33 +454,33 @@ class ApplePodcastExplorer:
                 check=True
             )
             
-            print(f"✅ 压缩完成: {output_file.name}")
+            print(f"✅ Compression complete: {output_file.name}")
             return True
             
         except subprocess.CalledProcessError as e:
-            print(f"❌ 压缩失败: {e}")
+            print(f"❌ Compression failed: {e}")
             return False
         except Exception as e:
-            print(f"❌ 压缩出错: {e}")
+            print(f"❌ Compression error: {e}")
             return False
     
     def transcribe_with_groq(self, audio_file: Path) -> dict:
         """
-        使用Groq API转录音频文件
+        Transcribe audio file using Groq API
         
         Args:
-            audio_file: 音频文件路径
+            audio_file: Audio file path
         
         Returns:
-            dict: 转录结果
+            dict: Transcription result
         """
         try:
-            print(f"🚀 Groq API转录: {audio_file.name}")
-            print("🧠 使用模型: whisper-large-v3")
+            print(f"🚀 Groq API transcription: {audio_file.name}")
+            print("🧠 Using model: whisper-large-v3")
             
             start_time = time.time()
             
-            # 打开音频文件并转录
+            # Open audio file and transcribe
             with open(audio_file, "rb") as file:
                 transcription = self.groq_client.audio.transcriptions.create(
                     file=file,
@@ -494,14 +493,14 @@ class ApplePodcastExplorer:
             end_time = time.time()
             processing_time = end_time - start_time
             
-            # 处理响应
+            # Handle response
             text = transcription.text if hasattr(transcription, 'text') else transcription.get('text', '')
             language = getattr(transcription, 'language', 'en') if hasattr(transcription, 'language') else transcription.get('language', 'en')
             
             file_size_mb = self.get_file_size_mb(audio_file)
             speed_ratio = file_size_mb / processing_time * 60 if processing_time > 0 else 0
             
-            print(f"✅ Groq转录完成! 用时: {processing_time:.1f}秒")
+            print(f"✅ Groq transcription complete! Time: {processing_time:.1f}s")
             
             return {
                 'text': text,
@@ -512,22 +511,22 @@ class ApplePodcastExplorer:
             }
             
         except Exception as e:
-            print(f"❌ Groq转录失败: {e}")
+            print(f"❌ Groq transcription failed: {e}")
             return None
     
     def transcribe_with_mlx(self, audio_file: Path) -> dict:
         """
-        使用MLX Whisper转录音频文件
+        Transcribe audio file using MLX Whisper
         
         Args:
-            audio_file: 音频文件路径
+            audio_file: Audio file path
         
         Returns:
-            dict: 转录结果
+            dict: Transcription result
         """
         try:
-            print(f"🎯 MLX Whisper转录: {audio_file.name}")
-            print("🧠 使用模型: mlx-community/whisper-medium")
+            print(f"🎯 MLX Whisper transcription: {audio_file.name}")
+            print("🧠 Using model: mlx-community/whisper-medium")
             
             start_time = time.time()
             
@@ -543,7 +542,7 @@ class ApplePodcastExplorer:
             file_size_mb = self.get_file_size_mb(audio_file)
             speed_ratio = file_size_mb / processing_time * 60 if processing_time > 0 else 0
             
-            print(f"✅ MLX转录完成! 用时: {processing_time:.1f}秒")
+            print(f"✅ MLX transcription complete! Time: {processing_time:.1f}s")
             
             return {
                 'text': result['text'],
@@ -554,42 +553,42 @@ class ApplePodcastExplorer:
             }
             
         except Exception as e:
-            print(f"❌ MLX转录失败: {e}")
+            print(f"❌ MLX transcription failed: {e}")
             return None
     
     def transcribe_audio_smart(self, audio_file: Path, episode_title: str, channel_name: str) -> bool:
         """
-        智能音频转录：根据文件大小选择最佳转录方式
+        Smart audio transcription: choose the best transcription method based on file size
         
         Args:
-            audio_file: 音频文件路径
-            episode_title: 剧集标题
-            channel_name: 频道名称
+            audio_file: Audio file path
+            episode_title: Episode title
+            channel_name: Channel name
         
         Returns:
-            bool: 转录是否成功
+            bool: Whether transcription was successful
         """
         if not TRANSCRIPTION_AVAILABLE:
-            print("❌ 没有可用的转录服务")
+            print("❌ No available transcription service")
             return False
         
         try:
-            # 构建转录文件名
+            # Build transcript filename
             safe_channel = self.sanitize_filename(channel_name)
             safe_title = self.sanitize_filename(episode_title)
-            transcript_filename = f"{safe_channel}_{safe_title}_transcript.md"
+            transcript_filename = f"Transcript_{safe_channel}_{safe_title}.md"
             transcript_filepath = self.transcript_dir / transcript_filename
             
-            # 检查转录文件是否已存在
+            # Check if transcript file already exists
             if transcript_filepath.exists():
-                print(f"⚠️  转录文件已存在，跳过: {transcript_filename}")
+                print(f"⚠️  Transcript file already exists, skipping: {transcript_filename}")
                 return True
             
-            print(f"🎙️  开始转录: {episode_title}")
+            print(f"🎙️  Starting transcription: {episode_title}")
             
-            # 检查文件大小
+            # Check file size
             file_size_mb = self.get_file_size_mb(audio_file)
-            print(f"📊 音频文件大小: {file_size_mb:.1f}MB")
+            print(f"📊 Audio file size: {file_size_mb:.1f}MB")
             
             groq_limit = 25  # MB
             transcript_result = None
@@ -597,192 +596,197 @@ class ApplePodcastExplorer:
             original_size = file_size_mb
             final_size = file_size_mb
             
-            # 智能转录策略
+            # Smart transcription strategy
             if file_size_mb <= groq_limit and GROQ_AVAILABLE:
-                # 情况1: 文件<25MB, 直接用Groq, 失败则MLX兜底
-                print("✅ 文件大小在Groq限制内，使用极速转录")
+                # Case 1: File < 25MB, use Groq directly with MLX fallback
+                print("✅ File size within Groq limit, using ultra-fast transcription")
                 transcript_result = self.transcribe_with_groq(audio_file)
                 
-                # Groq失败则MLX兜底
+                # Fallback to MLX if Groq fails
                 if not transcript_result and MLX_WHISPER_AVAILABLE:
-                    print("🔄 Groq失败，切换本地MLX Whisper...")
+                    print("🔄 Groq failed, falling back to MLX Whisper...")
                     transcript_result = self.transcribe_with_mlx(audio_file)
             
             elif file_size_mb > groq_limit:
-                # 情况2: 文件>25MB, 需压缩
-                print("⚠️  文件超出Groq限制，开始压缩...")
+                # Case 2: File > 25MB, need compression
+                print("⚠️  File exceeds Groq limit, starting compression...")
                 
                 compressed_file = audio_file.parent / f"compressed_{audio_file.name}"
                 
                 if self.compress_audio_file(audio_file, compressed_file):
                     compressed_size = self.get_file_size_mb(compressed_file)
                     final_size = compressed_size
-                    print(f"📊 压缩后大小: {compressed_size:.1f}MB")
+                    print(f"📊 Compressed size: {compressed_size:.1f}MB")
                     
                     if compressed_size <= groq_limit and GROQ_AVAILABLE:
-                        # 情况2a: 压缩后在Groq限制内, 失败则MLX兜底
-                        print("✅ 压缩后在Groq限制内，使用极速转录")
+                        # Case 2a: After compression, within Groq limit with MLX fallback
+                        print("✅ After compression, within Groq limit, using ultra-fast transcription")
                         transcript_result = self.transcribe_with_groq(compressed_file)
                         
-                        # Groq失败则MLX兜底
+                        # Fallback to MLX if Groq fails
                         if not transcript_result and MLX_WHISPER_AVAILABLE:
-                            print("🔄 Groq失败，切换本地MLX Whisper...")
+                            print("🔄 Groq failed, falling back to MLX Whisper...")
                             transcript_result = self.transcribe_with_mlx(compressed_file)
                     else:
-                        # 情况2b: 压缩后仍超限, 用MLX
-                        print("⚠️  压缩后仍超出限制，使用MLX本地转录")
+                        # Case 2b: Still exceeds limit after compression, use MLX
+                        print("⚠️  Still exceeds limit after compression, using MLX transcription")
                         if MLX_WHISPER_AVAILABLE:
                             transcript_result = self.transcribe_with_mlx(compressed_file)
                         else:
-                            print("❌ MLX Whisper不可用，无法转录大文件")
+                            print("❌ MLX Whisper not available, cannot transcribe large file")
                             return False
                 else:
-                    # 压缩失败，尝试MLX
-                    print("❌ 压缩失败，尝试本地MLX转录")
+                    # Compression failed, try MLX
+                    print("❌ Compression failed, trying local MLX transcription")
                     if MLX_WHISPER_AVAILABLE:
                         transcript_result = self.transcribe_with_mlx(audio_file)
                     else:
-                        print("❌ MLX Whisper不可用，转录失败")
+                        print("❌ MLX Whisper not available, transcription failed")
                         return False
             
             else:
-                # 情况3: Groq不可用，用MLX
-                print("⚠️  Groq API不可用，使用本地MLX转录")
+                # Case 3: Groq not available, use MLX
+                print("⚠️  Groq API not available, using local MLX transcription")
                 if MLX_WHISPER_AVAILABLE:
                     transcript_result = self.transcribe_with_mlx(audio_file)
                 else:
-                    print("❌ MLX Whisper不可用，转录失败")
+                    print("❌ MLX Whisper not available, transcription failed")
                     return False
             
-            # 处理转录结果
+            # Handle transcription result
             if not transcript_result:
-                print("❌ 所有转录方式均失败")
+                print("❌ All transcription methods failed")
                 return False
             
-            # 保存转录结果
+            # Save transcription result
+            compression_info = ""
+            if compressed_file and compressed_file.exists():
+                compression_ratio = ((original_size - final_size) / original_size * 100)
+                compression_info = f"**Compression Info:** {original_size:.1f}MB → {final_size:.1f}MB (compressed {compression_ratio:.1f}%)\n\n"
+            
             with open(transcript_filepath, 'w', encoding='utf-8') as f:
                 f.write(f"# {episode_title}\n\n")
-                f.write(f"**频道:** {channel_name}\n\n")
+                f.write(f"**Channel:** {channel_name}\n\n")
                 f.write("---\n\n")
                 f.write(transcript_result['text'])
             
-            print(f"✅ 转录完成: {transcript_filename}")
+            print(f"✅ Transcription complete: {transcript_filename}")
             
-            # 清理文件
+            # Clean up files
             try:
-                # 删除原音频文件
+                # Delete original audio file
                 audio_file.unlink()
-                print(f"🗑️  已删除音频文件: {audio_file.name}")
+                print(f"🗑️  Deleted audio file: {audio_file.name}")
                 
-                # 删除压缩文件（如有）
+                # Delete compressed file (if exists)
                 if compressed_file and compressed_file.exists():
                     compressed_file.unlink()
-                    print(f"🗑️  已删除压缩文件: {compressed_file.name}")
+                    print(f"🗑️  Deleted compressed file: {compressed_file.name}")
                     
             except Exception as e:
-                print(f"⚠️  删除文件失败: {e}")
+                print(f"⚠️  Failed to delete file: {e}")
             
             return True
             
         except Exception as e:
-            print(f"❌ 转录流程失败: {e}")
-            # 清理可能的不完整文件
+            print(f"❌ Transcription process failed: {e}")
+            # Clean up possible incomplete file
             if transcript_filepath.exists():
                 transcript_filepath.unlink()
             return False
     
     def download_episodes(self, episodes: List[Dict], channel_name: str):
         """
-        批量下载剧集
+        Batch download episodes
         
         Args:
-            episodes: 剧集列表
-            channel_name: 频道名称
+            episodes: List of episodes
+            channel_name: Channel name
         """
         if not episodes:
-            print("❌ 没有可下载的剧集")
+            print("❌ No episodes to download")
             return
         
-        print(f"\n💾 下载选项:")
-        print("格式说明:")
-        print("  - 下载单集: 输入数字，如 '3'")
-        print("  - 下载多集: 用逗号分隔，如 '1,3,5'")
-        print("  - 下载范围: 用连字符，如 '1-10'")
-        print("  - 组合使用: 如 '1,3-5,8'")
+        print(f"\n💾 Download options:")
+        print("Format instructions:")
+        print("  - Download single episode: enter a number, e.g. '3'")
+        print("  - Download multiple episodes: separate with commas, e.g. '1,3,5'")
+        print("  - Download range: use hyphen, e.g. '1-10'")
+        print("  - Combine: e.g. '1,3-5,8'")
         
-        user_input = input(f"\n请选择要下载的剧集 (1-{len(episodes)}) 或按回车跳过: ").strip()
+        user_input = input(f"\nPlease select episodes to download (1-{len(episodes)}) or press Enter to skip: ").strip()
         
         if not user_input:
-            print("跳过下载")
+            print("Skipping download")
             return
         
-        # 解析用户选择
+        # Parse user selection
         selected_indices = self.parse_episode_selection(user_input, len(episodes))
         
         if not selected_indices:
-            print("❌ 没有有效的剧集被选中")
+            print("❌ No valid episodes selected")
             return
         
-        print(f"\n准备下载{len(selected_indices)}集播客...")
+        print(f"\nPreparing to download {len(selected_indices)} podcast episodes...")
         
-        # 下载结果统计
+        # Download result stats
         success_count = 0
         total_count = len(selected_indices)
         downloaded_files = []
         
-        # 下载选中剧集
+        # Download selected episodes
         for i, episode_index in enumerate(selected_indices, 1):
             episode = episodes[episode_index]
-            episode_num = episode_index + 1  # 转回1基编号
+            episode_num = episode_index + 1  # Convert back to 1-based number
             
             print(f"\n[{i}/{total_count}] ", end="")
             if self.download_episode(episode, episode_num, channel_name):
                 success_count += 1
-                # 构建已下载文件路径
+                # Build downloaded file path
                 safe_channel = self.sanitize_filename(channel_name)
                 safe_title = self.sanitize_filename(episode['title'])
                 filename = f"{safe_channel}_{episode_num:02d}_{safe_title}.mp3"
                 downloaded_files.append((self.media_dir / filename, episode['title']))
         
-        # 显示下载汇总
-        print(f"\n📊 下载完成! 成功: {success_count}/{total_count}")
+        # Show download summary
+        print(f"\n📊 Download complete! Success: {success_count}/{total_count}")
         if success_count < total_count:
-            print(f"⚠️  {total_count - success_count}个文件下载失败")
+            print(f"⚠️  {total_count - success_count} files failed to download")
         
-        # 询问是否转录
+        # Ask whether to transcribe
         if success_count > 0 and TRANSCRIPTION_AVAILABLE:
             self.transcribe_downloaded_files(downloaded_files, channel_name)
     
     def transcribe_downloaded_files(self, downloaded_files: List[tuple], channel_name: str):
         """
-        转录已下载文件
+        Transcribe downloaded files
         
         Args:
-            downloaded_files: [(文件路径, 标题), ...]
-            channel_name: 频道名称
+            downloaded_files: List of downloaded files [(filepath, title), ...]
+            channel_name: Channel name
         """
-        print(f"\n🎙️  转录选项:")
+        print(f"\n🎙️  Transcription options:")
         
-        transcribe_choice = input("是否要转录刚刚下载的音频文件? (y/n): ").strip().lower()
+        transcribe_choice = input("Transcribe the just downloaded audio files? (y/n): ").strip().lower()
         if transcribe_choice not in ['y', 'yes', '是']:
-            print("跳过转录")
+            print("Skipping transcription")
             return
         
-        # 转录文件
+        # Transcribe files
         success_count = 0
         total_count = len(downloaded_files)
         
-        print(f"\n🚀 开始智能转录{total_count}个文件...")
+        print(f"\n🚀 Starting smart transcription of {total_count} files...")
         if GROQ_AVAILABLE:
-            print("💡 将自动选择最佳转录方式: Groq API（极速）或MLX Whisper（本地）")
+            print("💡 Will automatically choose the best transcription method: Groq API (ultra-fast) or MLX Whisper (local)")
         else:
-            print("💡 使用MLX Whisper本地转录")
+            print("💡 Using MLX Whisper local transcription")
         
-        successful_transcripts = []  # 存储成功转录的信息
+        successful_transcripts = []  # Store info of successful transcriptions
         
         for i, (audio_file, episode_title) in enumerate(downloaded_files, 1):
             if not audio_file.exists():
-                print(f"❌ 文件不存在: {audio_file}")
+                print(f"❌ File does not exist: {audio_file}")
                 continue
             
             print(f"\n[{i}/{total_count}] ", end="")
@@ -790,52 +794,50 @@ class ApplePodcastExplorer:
                 success_count += 1
                 successful_transcripts.append((episode_title, channel_name))
         
-        print(f"\n📊 转录完成! 成功: {success_count}/{total_count}")
+        print(f"\n📊 Transcription complete! Success: {success_count}/{total_count}")
         if success_count > 0:
-            print(f"📁 转录文件保存在: {self.transcript_dir.absolute()}")
+            print(f"📁 Transcript files saved in: {self.transcript_dir.absolute()}")
             
-            # 询问是否生成摘要
+            # Ask whether to generate summary
             if self.gemini_client and successful_transcripts:
-                print(f"\n✨ 摘要生成选项:")
-                print("是否为转录文件生成智能摘要?")
+                print(f"\n✨ Summary generation options:")
+                print("Generate smart summary for transcript files?")
                 
-                summary_choice = input("生成摘要? (y/n): ").strip().lower()
+                summary_choice = input("Generate summary? (y/n): ").strip().lower()
                 if summary_choice in ['y', 'yes', '是']:
-                    # 询问摘要语言
-                    language_choice = input("摘要语言 (en/ch): ").strip().lower()
+                    # Ask language preference
+                    language_choice = input("Summary language (en/ch): ").strip().lower()
                     if language_choice not in ['en', 'ch']:
-                        print("默认使用英文")
+                        print("Defaulting to English")
                         language_choice = 'en'
                     
-                    # 为每个成功转录文件生成摘要
-                    print(f"\n🚀 开始为{len(successful_transcripts)}个文件生成摘要...")
+                    # Generate summary for each successful transcript file
+                    print(f"\n🚀 Starting summary generation for {len(successful_transcripts)} files...")
                     summary_success_count = 0
                     
                     for i, (episode_title, channel_name) in enumerate(successful_transcripts, 1):
-                        print(f"\n[{i}/{len(successful_transcripts)}] 处理: {episode_title}")
+                        print(f"\n[{i}/{len(successful_transcripts)}] Processing: {episode_title}")
                         
-                        # 读取转录文件
+                        # Read transcript file
                         safe_channel = self.sanitize_filename(channel_name)
                         safe_title = self.sanitize_filename(episode_title)
-                        transcript_filename = f"{safe_channel}_{safe_title}_transcript.md"
+                        transcript_filename = f"Transcript_{safe_channel}_{safe_title}.md"
                         transcript_filepath = self.transcript_dir / transcript_filename
                         
                         if not transcript_filepath.exists():
-                            print(f"❌ 转录文件不存在: {transcript_filename}")
+                            print(f"❌ Transcript file does not exist: {transcript_filename}")
                             continue
                         
                         try:
-                            # 读取转录内容
+                            # Read transcript content
                             with open(transcript_filepath, 'r', encoding='utf-8') as f:
                                 content = f.read()
                             
-                            # 提取实际转录文本（跳过元数据）
-                            if "## 转录内容" in content:
-                                transcript_text = content.split("## 转录内容")[1].strip()
-                            elif "## Transcript Content" in content:
+                            # Extract actual transcript text (skip metadata)
+                            if "## Transcript Content" in content:
                                 transcript_text = content.split("## Transcript Content")[1].strip()
                             elif "---" in content:
-                                # 备用: ---后内容
+                                # Alternative: content after ---
                                 parts = content.split("---", 1)
                                 if len(parts) > 1:
                                     transcript_text = parts[1].strip()
@@ -845,93 +847,93 @@ class ApplePodcastExplorer:
                                 transcript_text = content
                             
                             if len(transcript_text.strip()) < 100:
-                                print("⚠️  转录内容过短，跳过摘要生成")
+                                print("⚠️  Transcript content too short, skipping summary generation")
                                 continue
                             
-                            # 生成摘要
+                            # Generate summary
                             summary = self.generate_summary(transcript_text, episode_title)
                             if not summary:
-                                print("❌ 摘要生成失败")
+                                print("❌ Summary generation failed")
                                 continue
                             
-                            # 选中文翻译
+                            # If Chinese selected, translate
                             final_summary = summary
                             if language_choice == 'ch':
                                 translated_summary = self.translate_to_chinese(summary)
                                 if translated_summary:
                                     final_summary = translated_summary
-                                    print("✅ 摘要已翻译为中文")
+                                    print("✅ Summary translated to Chinese")
                                 else:
-                                    print("⚠️  翻译失败，使用英文摘要")
-                                    language_choice = 'en'  # 回退英文
+                                    print("⚠️  Translation failed, using English summary")
+                                    language_choice = 'en'  # Fallback to English
                             
-                            # 保存摘要
+                            # Save summary
                             summary_path = self.save_summary(final_summary, episode_title, channel_name, language_choice)
                             if summary_path:
-                                print(f"✅ 摘要已保存: {Path(summary_path).name}")
+                                print(f"✅ Summary saved: {Path(summary_path).name}")
                                 summary_success_count += 1
                             else:
-                                print("❌ 摘要保存失败")
+                                print("❌ Failed to save summary")
                                 
                         except Exception as e:
-                            print(f"❌ 摘要处理出错: {e}")
+                            print(f"❌ Error processing summary: {e}")
                             continue
                     
-                    print(f"\n📊 摘要生成完成! 成功: {summary_success_count}/{len(successful_transcripts)}")
+                    print(f"\n📊 Summary generation complete! Success: {summary_success_count}/{len(successful_transcripts)}")
                     if summary_success_count > 0:
-                        print(f"📁 摘要文件保存在: {self.transcript_dir.absolute()}")
+                        print(f"📁 Summary files saved in: {self.transcript_dir.absolute()}")
                         
                         # Ask about visualization
                         self.ask_for_visualization(successful_transcripts, language_choice)
                 else:
-                    print("跳过摘要生成")
+                    print("Skipping summary generation")
                     
                     # Ask about visualization for transcript only
-                    self.ask_for_visualization(successful_transcripts, 'ch')
+                    self.ask_for_visualization(successful_transcripts, 'en')
             elif not self.gemini_client and successful_transcripts:
-                print(f"\n⚠️  Gemini API不可用，无法生成摘要")
-                print(f"💡 如需启用摘要，请在.env文件中设置GEMINI_API_KEY")
+                print(f"\n⚠️  Gemini API not available, cannot generate summary")
+                print(f"💡 To enable summary, set GEMINI_API_KEY in your .env file")
                 
                 # Ask about visualization for transcript only
-                self.ask_for_visualization(successful_transcripts, 'ch')
+                self.ask_for_visualization(successful_transcripts, 'en')
     
     def ask_for_visualization(self, successful_transcripts: List[tuple], language: str):
         """
-        询问用户是否要生成可视化故事
+        Ask user if they want to generate visual stories
         
         Args:
-            successful_transcripts: 成功转录的(episode_title, channel_name)元组列表
-            language: 语言偏好 ('ch' 为中文)
+            successful_transcripts: List of (episode_title, channel_name) tuples
+            language: Language preference ('en' for English)
         """
         if not successful_transcripts:
             return
         
-        print(f"\n🎨 可视化故事生成:")
-        visualize_choice = input("生成可视化故事? (y/n): ").strip().lower()
+        print(f"\n🎨 Visual Story Generation:")
+        visualize_choice = input("Visualize the story? (y/n): ").strip().lower()
         
-        if visualize_choice not in ['y', 'yes', '是']:
+        if visualize_choice not in ['y', 'yes']:
             return
         
         # Ask whether to use transcript or summary
-        print("📄 内容来源:")
-        content_choice = input("基于转录文本还是摘要生成可视化? (t/s): ").strip().lower()
+        print("📄 Content source:")
+        content_choice = input("Visualize based on transcript or summary? (t/s): ").strip().lower()
         
         if content_choice not in ['t', 's']:
-            print("选择无效，跳过可视化生成。")
+            print("Invalid choice. Skipping visualization.")
             return
         
         # Import visual module
         try:
-            from .visual_ch import generate_visual_story
+            from .visual_en import generate_visual_story
         except ImportError:
-            print("❌ 未找到可视化模块。请确保visual_ch.py在echomind文件夹中。")
+            print("❌ Visual module not found. Please ensure visual_en.py is in the podlens folder.")
             return
         
         # Process each successful transcript/summary
         visual_success_count = 0
         
         for i, (episode_title, channel_name) in enumerate(successful_transcripts, 1):
-            print(f"\n[{i}/{len(successful_transcripts)}] 正在生成可视化故事: {episode_title}")
+            print(f"\n[{i}/{len(successful_transcripts)}] Generating visual story: {episode_title}")
             
             # Build file paths
             safe_channel = self.sanitize_filename(channel_name)
@@ -940,46 +942,46 @@ class ApplePodcastExplorer:
             if content_choice == 't':
                 # Use transcript
                 source_filename = f"Transcript_{safe_channel}_{safe_title}.md"
-                content_type = "转录文本"
+                content_type = "transcript"
             else:
                 # Use summary
                 source_filename = f"Summary_{safe_channel}_{safe_title}.md"
-                content_type = "摘要"
+                content_type = "summary"
             
             source_filepath = self.transcript_dir / source_filename
             
             if not source_filepath.exists():
-                print(f"❌ {content_type}文件未找到: {source_filename}")
+                print(f"❌ {content_type.capitalize()} file not found: {source_filename}")
                 continue
             
             # Generate visual story
             if generate_visual_story(str(source_filepath)):
                 visual_success_count += 1
-                print(f"✅ 可视化故事生成成功!")
+                print(f"✅ Visual story generated successfully!")
             else:
-                print(f"❌ 可视化故事生成失败")
+                print(f"❌ Failed to generate visual story")
         
-        print(f"\n📊 可视化故事生成完成! 成功: {visual_success_count}/{len(successful_transcripts)}")
+        print(f"\n📊 Visual story generation complete! Success: {visual_success_count}/{len(successful_transcripts)}")
         if visual_success_count > 0:
-            print(f"📁 可视化故事保存在: {self.transcript_dir.absolute()}")
+            print(f"📁 Visual stories saved in: {self.transcript_dir.absolute()}")
 
     def generate_summary(self, transcript: str, title: str) -> str:
         """
-        使用Gemini API生成摘要
+        Generate summary using Gemini API
         
         Args:
-            transcript: 转录文本
-            title: 剧集标题
+            transcript: Transcript text
+            title: Episode title
         
         Returns:
-            str: 生成的摘要，失败返回None
+            str: Generated summary, None if failed
         """
         if not self.gemini_client:
-            print("❌ Gemini API不可用，无法生成摘要")
+            print("❌ Gemini API not available, cannot generate summary")
             return None
         
         try:
-            print("✨ 正在生成摘要...")
+            print("✨ Generating summary...")
             
             prompt = f"""
             Please provide a comprehensive summary and analysis of this podcast episode transcript.
@@ -995,91 +997,91 @@ class ApplePodcastExplorer:
             6. Overall themes, and the logic of the opinions expressed in the podcast
             7. Critical thinking and analysis for this podcast, reasoning from first principles
             
-            转录文本:
+            Transcript:
             {transcript}
             """
             
             response = self.gemini_client.GenerativeModel("gemini-2.5-flash-preview-05-20").generate_content(prompt)
             
-            # 处理响应
+            # Handle the response properly
             if hasattr(response, 'text'):
                 return response.text
             elif hasattr(response, 'candidates') and response.candidates:
                 return response.candidates[0].content.parts[0].text
             else:
-                print("❌ Gemini API响应格式异常")
+                print("❌ Gemini API response format abnormal")
                 return None
                 
         except Exception as e:
-            print(f"❌ 摘要生成失败: {e}")
+            print(f"❌ Summary generation failed: {e}")
             return None
     
     def translate_to_chinese(self, text: str) -> str:
         """
-        翻译文本为中文
+        Translate text to Chinese
         
         Args:
-            text: 待翻译文本
+            text: Text to translate
         
         Returns:
-            str: 中文翻译，失败返回None
+            str: Translated Chinese text, None if failed
         """
         if not self.gemini_client:
-            print("❌ Gemini API不可用，无法翻译")
+            print("❌ Gemini API not available, cannot translate")
             return None
         
         try:
-            print("🔄 正在翻译为中文...")
+            print("🔄 Translating to Chinese...")
             
             prompt = f"Translate everything to Chinese accurately without missing anything:\n\n{text}"
             
             response = self.gemini_client.GenerativeModel("gemini-2.5-flash-preview-05-20").generate_content(prompt)
             
-            # 处理响应
+            # Handle the response properly
             if hasattr(response, 'text'):
                 return response.text
             elif hasattr(response, 'candidates') and response.candidates:
                 return response.candidates[0].content.parts[0].text
             else:
-                print("❌ Gemini API响应格式异常")
+                print("❌ Gemini API response format abnormal")
                 return None
                 
         except Exception as e:
-            print(f"❌ 翻译失败: {e}")
+            print(f"❌ Translation failed: {e}")
             return None
     
     def save_summary(self, summary: str, title: str, channel_name: str, language: str = "en") -> str:
         """
-        保存摘要到文件
+        Save summary to file
         
         Args:
-            summary: 摘要内容
-            title: 剧集标题
-            channel_name: 频道名称
-            language: 语言标识
+            summary: Summary content
+            title: Episode title
+            channel_name: Channel name
+            language: Language identifier
         
         Returns:
-            str: 保存的文件路径
+            str: Saved file path
         """
         try:
-            # 构建摘要文件名
+            # Build summary filename
             safe_channel = self.sanitize_filename(channel_name)
             safe_title = self.sanitize_filename(title)
             lang_suffix = "_zh" if language == "ch" else "_en"
-            summary_filename = f"{safe_channel}_{safe_title}_summary{lang_suffix}.md"
+            summary_filename = f"Summary_{safe_channel}_{safe_title}.md"
             summary_filepath = self.transcript_dir / summary_filename
             
             with open(summary_filepath, 'w', encoding='utf-8') as f:
-                f.write(f"# 摘要: {title}\n\n" if language == "ch" else f"# Summary: {title}\n\n")
-                f.write(f"**频道:** {channel_name}\n\n" if language == "ch" else f"**Channel:** {channel_name}\n\n")
-                f.write(f"**摘要生成时间:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n" if language == "ch" else f"**Summary Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-                f.write(f"**语言:** {'中文' if language == 'ch' else 'English'}\n\n")
+                f.write(f"# Summary: {title}\n\n" if language == "en" else f"# 摘要: {title}\n\n")
+                f.write(f"**Channel:** {channel_name}\n\n" if language == "en" else f"**频道:** {channel_name}\n\n")
+                f.write(f"**Summary Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n" if language == "en" else f"**摘要生成时间:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+                f.write(f"**Language:** {'English' if language == 'en' else 'Chinese'}\n\n")
                 f.write("---\n\n")
-                f.write("## 摘要内容\n\n" if language == "ch" else "## Summary Content\n\n")
+                f.write("## Summary Content\n\n" if language == "en" else "## 摘要内容\n\n")
                 f.write(summary)
             
             return str(summary_filepath)
             
         except Exception as e:
-            print(f"❌ 摘要保存失败: {e}")
+            print(f"❌ Failed to save summary: {e}")
             return None
