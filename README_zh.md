@@ -138,6 +138,8 @@ your-project/
   - **大文件 (\>25MB)**: 自动压缩 + 回退到 MLX Whisper
   - **回退链**: Groq → MLX Whisper → 错误处理
 
+![智能转录逻辑](demo/Transcript_en.md)
+
 ### AI 摘要功能
 
   - **顺序分析**: 按顺序生成主题大纲
@@ -146,6 +148,7 @@ your-project/
   - **批判性思维**: 第一性原理分析
 
 ![AI 摘要示例](demo/summary_ch.png)
+[查看示例摘要](demo/Summary_ch.md)
 
 
 ### 交互式可视化功能
@@ -159,7 +162,7 @@ your-project/
 
 
 ![可视化演示](demo/visual_demo_ch.png)
-
+[查看示例可视化](demo/Visual_ch.html)
 
 ## 🙏 致谢
 

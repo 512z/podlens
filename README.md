@@ -131,6 +131,8 @@ your-project/
 - **Large files (>25MB)**: Automatic compression + fallback to MLX Whisper
 - **Fallback chain**: Groq → MLX Whisper → Error handling
 
+![PodLens Transcription Example](demo/Transcript_en.md)
+
 ### AI Summary Features
 - **Sequential analysis**: Topic outline in order
 - **Key insights**: Important takeaways and quotes
@@ -138,7 +140,7 @@ your-project/
 - **Critical thinking**: First-principles analysis
 
 ![PodLens Summary Example](demo/summary.png)
-
+[View Example Summary](demo/Summary_en.md)
 
 ### Interactive Visualization Features
 - **Modern Web Design**: Beautiful, responsive HTML pages using Tailwind CSS
@@ -150,6 +152,7 @@ your-project/
 
 
 ![PodLens Visual Story Example](demo/visual_demo.png)
+[View Example Visual Story](demo/Visual_en.html)
 
 
 ## 📄 License
