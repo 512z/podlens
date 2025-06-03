@@ -4,15 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "podlens"
-version = "1.0.0"
-description = "播客转录与摘要工具，支持 Apple Podcast 和 YouTube 平台"
+version = "1.0.4"
+description = "Intelligent Podcast & Youtube Transcription & Understanding AI Agent"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "PodLens Team", email = "contact@podlens.app"}
+    {name = "Dunyuan Zha", email = "henryzha@outlook.com"}
 ]
 maintainers = [
-    {name = "PodLens Team", email = "contact@podlens.app"}
+    {name = "Dunyuan Zha", email = "henryzha@outlook.com"}
 ]
 keywords = ["podcast", "transcription", "summary", "youtube", "apple podcast", "whisper", "ai"]
 classifiers = [
@@ -50,10 +50,9 @@ podlens-ch = "podlens.cli_ch:main"
 podlens = "podlens.cli_en:main"
 
 [project.urls]
-Homepage = "https://github.com/henryzha/podlens"
-Repository = "https://github.com/henryzha/podlens.git"
-Documentation = "https://github.com/henryzha/podlens#readme"
-"Bug Tracker" = "https://github.com/henryzha/podlens/issues"
+Homepage = "https://github.com/512z/podlens/tree/main"
+Repository = "https://github.com/512z/podlens/tree/main"
+
 
 [tool.setuptools]
 packages = ["podlens"]

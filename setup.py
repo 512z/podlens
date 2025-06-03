@@ -10,19 +10,18 @@ from setuptools import setup, find_packages
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
-# 从requirements.txt读取所有依赖
 with open("requirements.txt", "r", encoding="utf-8") as fh:
     requirements = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
 
 setup(
     name="podlens",
-    version="1.0.0",
-    author="PodLens Team",
-    author_email="contact@podlens.app",
+    version="1.0.1",
+    author="Dunyuan Zha",
+    author_email="henryzha@outlook.com",
     description="智能播客转录与摘要工具，支持 Apple Podcast 和 YouTube / Intelligent podcast transcription and summary tool for Apple Podcast and YouTube",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/henryzha/podlens",
+    url="https://github.com/512z/podlens/tree/main",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 4 - Beta",
@@ -59,10 +58,7 @@ setup(
         "gemini", "groq", "mlx", "audio processing", "text generation"
     ],
     project_urls={
-        "Bug Reports": "https://github.com/henryzha/podlens/issues",
-        "Source": "https://github.com/henryzha/podlens",
-        "Documentation": "https://github.com/henryzha/podlens#readme",
-        "Homepage": "https://github.com/henryzha/podlens",
+        "Homepage": "https://github.com/512z/podlens/tree/main",
     },
     include_package_data=True,
     zip_safe=False,

@@ -5,8 +5,27 @@ PodLens 中文版命令行界面
 
 import sys
 import os
+from pathlib import Path
+from dotenv import load_dotenv
 from .apple_podcast_ch import ApplePodcastExplorer, MLX_WHISPER_AVAILABLE, MLX_DEVICE, GROQ_AVAILABLE
 from .youtube_ch import Podnet
+
+# Enhanced .env loading function
+def load_env_robust():
+    """Load .env file from multiple possible locations"""
+    # Try loading from current working directory first
+    if load_dotenv():
+        return True
+    
+    # Try loading from home directory
+    home_env = Path.home() / '.env'
+    if home_env.exists() and load_dotenv(home_env):
+        return True
+    
+    return False
+
+# Load environment variables
+load_env_robust()
 
 # 检查Gemini API可用性
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
@@ -27,18 +46,25 @@ def show_logo():
 
 def show_status():
     """显示系统状态（中文）"""
+    # Dynamically check API availability after environment loading
+    import os
+    
+    # Re-check API availability
+    groq_available = bool(os.getenv('GROQ_API_KEY'))
+    gemini_available = bool(os.getenv('GEMINI_API_KEY'))
+    
     if MLX_WHISPER_AVAILABLE:
         print(f"🎯 MLX Whisper 可用，使用设备: {MLX_DEVICE}")
     else:
         print("⚠️  MLX Whisper 不可用")
     
-    if GROQ_AVAILABLE:
+    if groq_available:
         print("🚀 Groq API 可用，已启用超快转录")
     else:
         print("⚠️  Groq API 不可用")
         print("💡 请获得免费api并加入.env: GROQ_API_KEY= https://console.groq.com/")
     
-    if GEMINI_AVAILABLE:
+    if gemini_available:
         print("🤖 Gemini API 可用，已启用AI摘要功能")
     else:
         print("⚠️  Gemini API 不可用")

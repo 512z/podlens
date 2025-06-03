@@ -8,8 +8,22 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 from pathlib import Path
 
-# Load .env file
-load_dotenv()
+# Enhanced .env loading function
+def load_env_robust():
+    """Load .env file from multiple possible locations"""
+    # Try loading from current working directory first
+    if load_dotenv():
+        return True
+    
+    # Try loading from home directory
+    home_env = Path.home() / '.env'
+    if home_env.exists() and load_dotenv(home_env):
+        return True
+    
+    return False
+
+# Load .env file with robust search
+load_env_robust()
 
 def generate_visual_story(input_file: str, output_file: str = None) -> bool:
     """
