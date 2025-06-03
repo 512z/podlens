@@ -436,7 +436,8 @@ class ApplePodcastExplorer:
     
     def compress_audio_file(self, input_file: Path, output_file: Path) -> bool:
         """
-        Compress audio file below Groq API limit
+        Smart two-level audio compression below Groq API limit
+        Prefer 64k for quality, fallback to 48k if still >25MB
         
         Args:
             input_file: Input file path
@@ -447,35 +448,82 @@ class ApplePodcastExplorer:
         """
         try:
             print(f"🔧 Compressing audio file: {input_file.name}")
-            print("📊 Compression parameters: 16KHz mono, 24kbps MP3")
             
-            # ffmpeg compression command
-            cmd = [
+            # First level compression: 64k (prioritize quality)
+            print("📊 First level compression: 16KHz mono, 64kbps MP3")
+            
+            temp_64k_file = output_file.parent / f"temp_64k_{output_file.name}"
+            
+            cmd_64k = [
                 'ffmpeg',
                 '-i', str(input_file),
-                '-ar', '16000',        # Downsample to 16KHz (MP3 standard support)
+                '-ar', '16000',        # Downsample to 16KHz
                 '-ac', '1',            # Mono
-                '-b:a', '24k',         # 24kbps bitrate
+                '-b:a', '64k',         # 64kbps bitrate
                 '-y',                  # Overwrite output file
-                str(output_file)
+                str(temp_64k_file)
             ]
             
-            # Run compression (silent mode)
+            # Run first level compression
             result = subprocess.run(
-                cmd,
+                cmd_64k,
                 capture_output=True,
                 text=True,
                 check=True
             )
             
-            print(f"✅ Compression complete: {output_file.name}")
-            return True
+            # Check 64k compressed file size
+            compressed_size_mb = self.get_file_size_mb(temp_64k_file)
+            print(f"📊 64k compressed size: {compressed_size_mb:.1f}MB")
+            
+            if compressed_size_mb <= 25:
+                # 64k compression meets requirement, use 64k result
+                temp_64k_file.rename(output_file)
+                print(f"✅ 64k compression complete: {output_file.name} ({compressed_size_mb:.1f}MB)")
+                return True
+            else:
+                # 64k compression still >25MB, perform second level 48k compression
+                print(f"⚠️  64k compression still >25MB, performing second level 48k compression...")
+                print("📊 Second level compression: 16KHz mono, 48kbps MP3")
+                
+                cmd_48k = [
+                    'ffmpeg',
+                    '-i', str(input_file),
+                    '-ar', '16000',        # Downsample to 16KHz
+                    '-ac', '1',            # Mono
+                    '-b:a', '48k',         # 48kbps bitrate
+                    '-y',                  # Overwrite output file
+                    str(output_file)
+                ]
+                
+                # Run second level compression
+                result = subprocess.run(
+                    cmd_48k,
+                    capture_output=True,
+                    text=True,
+                    check=True
+                )
+                
+                final_size_mb = self.get_file_size_mb(output_file)
+                print(f"✅ 48k compression complete: {output_file.name} ({final_size_mb:.1f}MB)")
+                
+                # Clean up temporary file
+                if temp_64k_file.exists():
+                    temp_64k_file.unlink()
+                
+                return True
             
         except subprocess.CalledProcessError as e:
             print(f"❌ Compression failed: {e}")
+            # Clean up temporary file
+            if 'temp_64k_file' in locals() and temp_64k_file.exists():
+                temp_64k_file.unlink()
             return False
         except Exception as e:
             print(f"❌ Compression error: {e}")
+            # Clean up temporary file
+            if 'temp_64k_file' in locals() and temp_64k_file.exists():
+                temp_64k_file.unlink()
             return False
     
     def transcribe_with_groq(self, audio_file: Path) -> dict:

@@ -337,36 +337,86 @@ class TranscriptExtractor:
             return None
     
     def compress_audio_file(self, input_file: Path, output_file: Path) -> bool:
-        """Compress audio file below Groq API limit (copied from Apple section)"""
+        """智能两级压缩音频文件至Groq API限制以下 (从Apple模块复制)
+        首选64k保证质量，如果仍>25MB则降至48k"""
         try:
             print(f"🔧 正在压缩音频文件: {input_file.name}")
-            print("📊 压缩参数: 16KHz 单声道, 24kbps MP3")
             
-            cmd = [
+            # 第一级压缩：64k (优先保证质量)
+            print("📊 第一级压缩: 16KHz 单声道, 64kbps MP3")
+            
+            temp_64k_file = output_file.parent / f"temp_64k_{output_file.name}"
+            
+            cmd_64k = [
                 'ffmpeg',
                 '-i', str(input_file),
                 '-ar', '16000',
                 '-ac', '1',
-                '-b:a', '24k',
+                '-b:a', '64k',
                 '-y',
-                str(output_file)
+                str(temp_64k_file)
             ]
             
+            # 运行第一级压缩
             result = subprocess.run(
-                cmd,
+                cmd_64k,
                 capture_output=True,
                 text=True,
                 check=True
             )
             
-            print(f"✅ 压缩完成: {output_file.name}")
-            return True
+            # 检查64k压缩后的文件大小
+            compressed_size_mb = self.get_file_size_mb(temp_64k_file)
+            print(f"📊 64k压缩后大小: {compressed_size_mb:.1f}MB")
+            
+            if compressed_size_mb <= 25:
+                # 64k压缩满足要求，使用64k结果
+                temp_64k_file.rename(output_file)
+                print(f"✅ 64k压缩完成: {output_file.name} ({compressed_size_mb:.1f}MB)")
+                return True
+            else:
+                # 64k压缩后仍>25MB，进行第二级48k压缩
+                print(f"⚠️  64k压缩后仍超25MB，进行第二级48k压缩...")
+                print("📊 第二级压缩: 16KHz 单声道, 48kbps MP3")
+                
+                cmd_48k = [
+                    'ffmpeg',
+                    '-i', str(input_file),
+                    '-ar', '16000',
+                    '-ac', '1',
+                    '-b:a', '48k',
+                    '-y',
+                    str(output_file)
+                ]
+                
+                # 运行第二级压缩
+                result = subprocess.run(
+                    cmd_48k,
+                    capture_output=True,
+                    text=True,
+                    check=True
+                )
+                
+                final_size_mb = self.get_file_size_mb(output_file)
+                print(f"✅ 48k压缩完成: {output_file.name} ({final_size_mb:.1f}MB)")
+                
+                # 清理临时文件
+                if temp_64k_file.exists():
+                    temp_64k_file.unlink()
+                
+                return True
             
         except subprocess.CalledProcessError as e:
             print(f"❌ 压缩失败: {e}")
+            # 清理临时文件
+            if 'temp_64k_file' in locals() and temp_64k_file.exists():
+                temp_64k_file.unlink()
             return False
         except Exception as e:
             print(f"❌ 压缩出错: {e}")
+            # 清理临时文件
+            if 'temp_64k_file' in locals() and temp_64k_file.exists():
+                temp_64k_file.unlink()
             return False
     
     def transcribe_with_groq(self, audio_file: Path) -> dict:
