@@ -4,10 +4,10 @@
 
 一款快速,免费且功能强大的播客转录和摘要工具，支持 Apple Podcast 和 YouTube 两大平台，具有中英双语界面，并集成了多种 AI 技术，可实现高质量的音频转录和智能摘要。
 
+**中文版 README** | [English README](README.md)
+
 ![终端演示](demo/terminal_ch.gif)
 
-
-**中文版 README** | [English README](README.md)
 
 ## ✨ 主要功能
 
