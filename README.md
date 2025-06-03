@@ -131,7 +131,7 @@ your-project/
 - **Large files (>25MB)**: Automatic compression + fallback to MLX Whisper
 - **Fallback chain**: Groq → MLX Whisper → Error handling
 
-![PodLens Transcription Example](demo/Transcript_en.md)
+[PodLens Transcription Example](demo/Transcript_en.md)
 
 ### AI Summary Features
 - **Sequential analysis**: Topic outline in order

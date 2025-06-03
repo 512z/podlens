@@ -138,7 +138,7 @@ your-project/
   - **大文件 (\>25MB)**: 自动压缩 + 回退到 MLX Whisper
   - **回退链**: Groq → MLX Whisper → 错误处理
 
-![智能转录逻辑](demo/Transcript_en.md)
+[智能转录逻辑](demo/Transcript_en.md)
 
 ### AI 摘要功能
 
