@@ -1,10 +1,5 @@
 # 🎧 PodLens - 智能播客&youtube转录与学习工具
 
-[![Stars](https://img.shields.io/github/stars/512z/podlens?style=social)](https://github.com/512z/podlens)
-[![License](https://img.shields.io/github/license/512z/podlens)](LICENSE)
-[![PyPI version](https://badge.fury.io/py/podlens.svg)](https://badge.fury.io/py/podlens)
-[![Downloads](https://pepy.tech/badge/podlens)](https://pepy.tech/project/podlens)
-
 🧠 为知识探索者打造, 更有效地从音频内容中学习。
 
 一个快速、免费且功能强大的工具，可以:
