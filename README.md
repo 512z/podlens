@@ -1,6 +1,6 @@
 # 🎧 PodLens - Intelligent Podcast & Youtube Transcription & Summary Tool
 
-![Terminal Demo](terminal.gif)
+![Terminal Demo](demo/terminal.gif)
 
 [中文版 README](README_zh.md) | **English README**
 
@@ -137,6 +137,9 @@ your-project/
 - **Technical terms**: Jargon explanation
 - **Critical thinking**: First-principles analysis
 
+![PodLens Summary Example](demo/summary.png)
+
+
 ### Interactive Visualization Features
 - **Modern Web Design**: Beautiful, responsive HTML pages using Tailwind CSS
 - **Data Visualizations**: Automatic charts and graphs for numerical content (percentages, metrics, comparisons)
@@ -146,7 +149,7 @@ your-project/
 - **Dual Input Support**: Generate visualizations from either transcripts or summaries
 
 
-![PodLens Visual Story Example](visual_demo.png)
+![PodLens Visual Story Example](demo/visual_demo.png)
 
 
 ## 📄 License

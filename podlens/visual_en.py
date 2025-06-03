@@ -204,7 +204,79 @@ NEVER USE:
 - Dark text on ANY gradient
 - Text without explicit color classes
 
-TEST EVERY CARD: Can I clearly read all text?
+CRITICAL DATA ACCURACY RULES:
+
+1. STATIC VS ANIMATED NUMBERS:
+   - For critical data points, show the FINAL VALUE immediately
+   - Only animate if you're certain the animation will work
+   - Prefer static display over broken animations
+
+2. ALPINE.JS DATA IMPLEMENTATION:
+   Instead of complex animations, use simpler patterns:
+   
+   BAD (might show 0):
+   <div x-data="{{ count: 0, target: 7 }}" x-init="animate...">
+     <span x-text="count + '%'">0%</span>
+   </div>
+   
+   GOOD (always shows correct value):
+   <div x-data="{{ value: 7 }}">
+     <span x-text="value + '%'">7%</span>
+   </div>
+   
+   BETTER (with simple fade-in):
+   <div x-data="{{ show: false }}" x-init="setTimeout(() => show = true, 500)" 
+        x-show="show" x-transition>
+     <span class="text-3xl font-bold">7%</span>
+   </div>
+
+3. FALLBACK VALUES:
+   - Always include the actual value in the HTML as fallback
+   - Example: <span x-text="count + '%'">7%</span> (not just 0%)
+
+4. DATA VERIFICATION CHECKLIST:
+   ✓ Does each number match the source content exactly?
+   ✓ Is the number visible even if JavaScript fails?
+   ✓ Is the animation simple enough to work reliably?
+
+5. PREFER SIMPLE SOLUTIONS:
+   - Use CSS animations instead of complex JavaScript
+   - Show numbers immediately, animate other elements
+   - Example CSS counter animation:
+   
+   @keyframes countUp {{
+     from {{ opacity: 0; transform: translateY(20px); }}
+     to {{ opacity: 1; transform: translateY(0); }}
+   }}
+   .number-animate {{
+     animation: countUp 0.8s ease-out;
+   }}
+
+For ANY numerical data display:
+
+Option 1 - Static Display (RECOMMENDED):
+<div class="text-5xl font-bold text-blue-600">7%</div>
+
+Option 2 - Simple Reveal:
+<div class="text-5xl font-bold text-blue-600 number-animate">7%</div>
+
+Option 3 - If you MUST use Alpine.js:
+<div x-data="{{ value: 7, show: false }}" 
+     x-init="setTimeout(() => show = true, 100)">
+  <span class="text-5xl font-bold text-blue-600" 
+        x-show="show" x-transition
+        x-text="value + '%'">7%</span>
+</div>
+
+NEVER leave empty or 0 as default - always show the correct value!
+
+DATA DISPLAY RULE:
+- Show all numbers as static text FIRST
+- Add animations only as enhancement
+- Never rely on JavaScript for critical data visibility
+- Every number must be readable even with JavaScript disabled
+
+TEST EVERY CARD: Can I clearly read all text? All data are accurate?
 
 The overall style should be modern, minimal, and futuristic.
 

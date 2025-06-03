@@ -15,10 +15,10 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
 
 setup(
     name="podlens",
-    version="1.0.1",
+    version="1.0.6",
     author="Dunyuan Zha",
     author_email="henryzha@outlook.com",
-    description="智能播客转录与摘要工具，支持 Apple Podcast 和 YouTube / Intelligent podcast transcription and summary tool for Apple Podcast and YouTube",
+    description="智能播客转录与摘要工具，支持 Apple Podcast 和 YouTube / Intelligent Podcast & Youtube Transcription & Understanding AI Agent",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/512z/podlens/tree/main",

@@ -591,7 +591,7 @@ class ApplePodcastExplorer:
             # 构建转录文件名
             safe_channel = self.sanitize_filename(channel_name)
             safe_title = self.sanitize_filename(episode_title)
-            transcript_filename = f"{safe_channel}_{safe_title}_transcript.md"
+            transcript_filename = f"Transcript_{safe_channel}_{safe_title}.md"
             transcript_filepath = self.transcript_dir / transcript_filename
             
             # 检查转录文件是否已存在
@@ -831,7 +831,7 @@ class ApplePodcastExplorer:
                         # 读取转录文件
                         safe_channel = self.sanitize_filename(channel_name)
                         safe_title = self.sanitize_filename(episode_title)
-                        transcript_filename = f"{safe_channel}_{safe_title}_transcript.md"
+                        transcript_filename = f"Transcript_{safe_channel}_{safe_title}.md"
                         transcript_filepath = self.transcript_dir / transcript_filename
                         
                         if not transcript_filepath.exists():
@@ -1079,8 +1079,7 @@ class ApplePodcastExplorer:
             # 构建摘要文件名
             safe_channel = self.sanitize_filename(channel_name)
             safe_title = self.sanitize_filename(title)
-            lang_suffix = "_zh" if language == "ch" else "_en"
-            summary_filename = f"{safe_channel}_{safe_title}_summary{lang_suffix}.md"
+            summary_filename = f"Summary_{safe_channel}_{safe_title}.md"
             summary_filepath = self.transcript_dir / summary_filename
             
             with open(summary_filepath, 'w', encoding='utf-8') as f:

@@ -187,7 +187,79 @@ def generate_visual_story(input_file: str, output_file: str = None) -> bool:
 - 在任何渐变背景上用深色文字
 - 未明确指定颜色类的文本
 
-检查每一张卡片：所有文字是否都清晰可读？
+关键数据准确性规范：
+
+1. 静态与动画数字：
+   - 对于关键数据点，立即显示最终值
+   - 只在确保动画能正常工作时才使用动画
+   - 优先使用静态显示而非有风险的动画
+
+2. ALPINE.JS 数据实现：
+   使用更简单的模式代替复杂动画：
+   
+   不推荐 (可能显示0)：
+   <div x-data="{{ count: 0, target: 7 }}" x-init="animate...">
+     <span x-text="count + '%'">0%</span>
+   </div>
+   
+   推荐 (始终显示正确值)：
+   <div x-data="{{ value: 7 }}">
+     <span x-text="value + '%'">7%</span>
+   </div>
+   
+   更佳 (带简单淡入效果)：
+   <div x-data="{{ show: false }}" x-init="setTimeout(() => show = true, 500)" 
+        x-show="show" x-transition>
+     <span class="text-3xl font-bold">7%</span>
+   </div>
+
+3. 后备值：
+   - 在HTML中始终包含实际值作为后备
+   - 示例：<span x-text="count + '%'">7%</span> (不要只写0%)
+
+4. 数据验证清单：
+   ✓ 每个数字是否与源内容完全匹配？
+   ✓ JavaScript失效时数字是否可见？
+   ✓ 动画是否足够简单可靠？
+
+5. 倾向使用简单方案：
+   - 使用CSS动画代替复杂的JavaScript
+   - 立即显示数字，仅为其他元素添加动画
+   - CSS计数器动画示例：
+   
+   @keyframes countUp {{
+     from {{ opacity: 0; transform: translateY(20px); }}
+     to {{ opacity: 1; transform: translateY(0); }}
+   }}
+   .number-animate {{
+     animation: countUp 0.8s ease-out;
+   }}
+
+对于任何数值数据显示：
+
+选项1 - 静态显示（推荐）：
+<div class="text-5xl font-bold text-blue-600">7%</div>
+
+选项2 - 简单显现：
+<div class="text-5xl font-bold text-blue-600 number-animate">7%</div>
+
+选项3 - 如果必须使用 Alpine.js：
+<div x-data="{{ value: 7, show: false }}" 
+     x-init="setTimeout(() => show = true, 100)">
+  <span class="text-5xl font-bold text-blue-600" 
+        x-show="show" x-transition
+        x-text="value + '%'">7%</span>
+</div>
+
+切勿将空值或0作为默认值 - 始终显示正确的值！
+
+数据显示规则：
+- 首先以静态文本显示所有数字
+- 仅将动画作为增强功能
+- 不要依赖JavaScript来显示关键数据
+- 即使禁用JavaScript也必须能读取所有数字
+
+检查每一张卡片：所有文字是否都清晰可读？所有数据是否准确?
 
 风格应该摩登, 简约, 科幻
 
