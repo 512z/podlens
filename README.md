@@ -2,7 +2,7 @@
 
 🧠 For knowledge-seekers who want to learn from audio content more effectively.
 
-A fast & cost-free & powerful tool that:
+A fast & cost-free & AI-powered tool that:
 - 🎙️ transcribes audio content from Apple Podcast and YouTube platforms
 - 📝 summarizes
 - 📊 visualizes
