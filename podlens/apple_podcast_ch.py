@@ -500,7 +500,6 @@ class ApplePodcastExplorer:
                 transcription = self.groq_client.audio.transcriptions.create(
                     file=file,
                     model="whisper-large-v3",
-                    language="en",
                     response_format="verbose_json",
                     temperature=0.0
                 )
@@ -547,8 +546,7 @@ class ApplePodcastExplorer:
             
             result = mlx_whisper.transcribe(
                 str(audio_file),
-                path_or_hf_repo=self.whisper_model_name,
-                language='en'
+                path_or_hf_repo=self.whisper_model_name
             )
             
             end_time = time.time()

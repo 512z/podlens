@@ -66,114 +66,134 @@ def generate_visual_story(input_file: str, output_file: str = None) -> bool:
         # Generate interactive HTML
         print("🎨 Generating interactive HTML...")
         
-        prompt = f"""请使用 Tailwind CSS、Alpine.js 和 Font Awesome（均通过 CDN）创建一个现代化、视觉效果极佳的单页 HTML 网站。
+        prompt = f"""使用 Tailwind CSS、Alpine.js 和 Font Awesome（均通过 CDN 引入）创建一个现代、视觉惊艳的单页 HTML 网站。
 
-强制性文本可见性规则 - 适用于每一个文本元素：
+【强制文本可读性规则——适用于每一个文本元素】：
 
-1.  需要添加的 CSS（必须包含）：
+1. 必须添加的 CSS：
+<style>
+.text-shadow {{ text-shadow: 0 2px 4px rgba(0,0,0,0.5); }}
+.text-shadow-strong {{ text-shadow: 0 4px 8px rgba(0,0,0,0.8); }}
+</style>
 
-    <style>
-    .text-shadow {{ text-shadow: 0 2px 4px rgba(0,0,0,0.5); }}
-    .text-shadow-strong {{ text-shadow: 0 4px 8px rgba(0,0,0,0.8); }}
-    </style>
+2. 渐变背景模式（严格遵循）：
+- 任何渐变背景 → text-white + text-shadow 类
+- 英雄区（Hero Section）→ 添加遮罩层：<div class="absolute inset-0 bg-black/20"></div>
+- 渐变卡片 → 所有内容包裹在：<div class="bg-white/95 backdrop-blur rounded-2xl p-6">
 
+3. 具体规则：
+- 紫/粉/蓝色渐变 → text-white text-shadow
+- 橙/红/黄色渐变 → text-white text-shadow-strong
+- 绿色/青色渐变 → text-white text-shadow
+- 白色/灰色背景 → text-gray-900（无需阴影）
 
-2.  渐变背景模式（严格按照以下方式使用）：
-    * 对于任何渐变背景 → `text-white` + `text-shadow` 类
-    * 对于主要区域（hero sections） → 添加叠加层：`<div class="absolute inset-0 bg-black/20"></div>`
-    * 对于渐变卡片 → 将所有内容包裹在：`<div class="bg-white/95 backdrop-blur rounded-2xl p-6">`
+4. 检查清单（每个元素都要检查）：
+✓ 导航文本是否可读？
+✓ 英雄区标题和副标题是否可读？
+✓ 所有卡片内容是否可读？
+✓ 各区块标题是否可读？
+✓ 每个区块正文是否可读？
 
-3.  特定规则：
-    * 紫色/粉色/蓝色渐变 → `text-white text-shadow`
-    * 橙色/红色/黄色渐变 → `text-white text-shadow-strong`
-    * 绿色/青色渐变 → `text-white text-shadow`
-    * 白色/灰色背景 → `text-gray-900`（无需阴影）
+5. 渐变卡片模板（请使用此模式）：
+<div class="bg-gradient-to-br from-[color1] to-[color2] p-1 rounded-2xl">
+  <div class="bg-white/95 backdrop-blur rounded-2xl p-6">
+    <h3 class="text-gray-900 font-bold">标题</h3>
+    <p class="text-gray-700">内容</p>
+  </div>
+</div>
 
-4.  测试清单（检查每个元素）：
-    ✓ 我能看清导航文字吗？
-    ✓ 我能看清主要区域的标题和副标题吗？
-    ✓ 我能看清所有卡片内容吗？
-    ✓ 我能看清区段标题吗？
-    ✓ 我能看清每个区段的正文文本吗？
+6. 渐变背景区块模板：
+<section class="relative bg-gradient-to-br from-[color1] to-[color2]">
+  <div class="absolute inset-0 bg-black/20"></div>
+  <div class="relative z-10 p-8">
+    <h2 class="text-white text-shadow text-3xl font-bold">区块标题</h2>
+    <p class="text-white/90 text-shadow">区块内容</p>
+  </div>
+</section>
 
-5.  渐变卡片模板（使用此模式）：
+7. 语言：中文
 
-    <div class="bg-gradient-to-br from-[color1] to-[color2] p-1 rounded-2xl">
-      <div class="bg-white/95 backdrop-blur rounded-2xl p-6">
-        <h3 class="text-gray-900 font-bold">标题</h3>
-        <p class="text-gray-700">内容</p>
-      </div>
-    </div>
+禁止：
+- 在渐变背景上使用灰色文本
+- 在渐变背景上使用渐变色文本
+- 忘记在渐变背景上加 text-shadow
+- 在深色渐变背景上白色文本透明度低于 90
 
+【数据可视化要求】：
+遇到内容中的数值数据时，请创建合适的数据可视化：
 
-6.  带渐变背景的区段模板：
+首先，所用数据必须完全准确，若无数据则不要虚构。
 
-    <section class="relative bg-gradient-to-br from-[color1] to-[color2]">
-      <div class="absolute inset-0 bg-black/20"></div>
-      <div class="relative z-10 p-8">
-        <h2 class="text-white text-shadow text-3xl font-bold">区段标题</h2>
-        <p class="text-white/90 text-shadow">区段内容</p>
-      </div>
-    </section>
-
-7.语言: 中文
-
-绝不：
-* 在渐变上放置灰色文本
-* 在渐变背景上使用渐变文本
-* 忘记在渐变背景上使用 `text-shadow`
-* 在深色渐变上使用透明度低于 90% 的白色文本
-
-数据可视化要求：
-遇到数字数据时，创建适当的可视化展示：
-
-首先，数据必须绝对准确，如果数据不存在，则不要使用任何数据。
-
-1. 百分比数据（如GDP增长、比率）：
+1. 百分比数据（如 GDP 增长、比率等）：
    - 使用带渐变填充的动画进度条
-   - 包含滚动时递增的百分比标签
-   - 颜色编码：正数用绿色，负数用红色
+   - 百分比标签在滚动时递增显示
+   - 颜色：正向为绿色，负向为红色
+   - 示例：
+<div class="relative pt-1">
+  <div class="flex mb-2 items-center justify-between">
+    <span class="text-xs font-semibold inline-block text-blue-600">GDP 增长</span>
+    <span class="text-xs font-semibold inline-block text-blue-600">2.9%</span>
+  </div>
+  <div class="overflow-hidden h-2 mb-4 text-xs flex rounded bg-blue-200">
+    <div style="width:29%" class="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-gradient-to-r from-blue-500 to-blue-600"></div>
+  </div>
+</div>
 
 2. 对比数据：
-   - 使用并排条形图或对比卡片
-   - 趋势的视觉指示器（箭头、图标）
-   - 前后对比可视化
+   - 使用并排柱状图或对比卡片
+   - 用箭头、图标等可视化趋势
+   - 可做前后对比可视化
 
 3. 关键指标：
-   - 带图标的大数字展示
-   - 使用Alpine.js的动画计数器
+   - 用大号数字和图标展示
+   - 可用 Alpine.js 实现简单动画计数
+   - 示例：
+<div x-data="{{ count: 0 }}" x-init="setTimeout(() => {{ let interval = setInterval(() => {{ if(count < 30) {{ count += 1 }} else {{ clearInterval(interval) }} }}, 50) }}, 500)">
+  <span class="text-5xl font-bold text-blue-600" x-text="count + '%'"></span>
+</div>
 
 4. 时间序列数据：
-   - 简单的线条表示或时间轴卡片
-   - 年度对比的视觉指示器
+   - 用简单折线或时间轴卡片表示
+   - 可做年度对比并加趋势指示
 
 5. 统计亮点：
-   - 将关键数字提取到突出显示的统计卡片中
-   - 使用渐变和图标使数字突出
+   - 关键数字突出显示在高亮卡片中
+   - 用渐变和图标让数字更醒目
+   - 示例：
+<div class="bg-gradient-to-br from-green-400 to-green-600 rounded-2xl p-6 text-white">
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-green-100">历史最低</p>
+      <p class="text-3xl font-bold">3.5%</p>
+      <p class="text-sm text-green-100">失业率</p>
+    </div>
+    <i class="fas fa-chart-line text-4xl text-green-200"></i>
+  </div>
+</div>
 
-绝对文本规范 - 不可违反：
+【绝对文本规则——无例外】：
 
-1. 有色背景（任何颜色）= 只能用白色文字
+1. 有色背景（任何颜色）= 只用白色文本
    - 绿色背景 → text-white
-   - 蓝色背景 → text-white  
+   - 蓝色背景 → text-white
    - 紫色背景 → text-white
    - 橙色背景 → text-white
-   - 任何渐变背景 → text-white
+   - 任何渐变 → text-white
 
-2. 仅在以下情况下使用深色文字：
-   - 纯白色背景
-   - Gray-50（极浅灰）背景
-   - 白色/半透明白色叠加层
+2. 仅在以下情况下用深色文本：
+   - 纯白背景
+   - Gray-50 背景
+   - 白色/半透明遮罩
 
-3. 卡片样式（必须使用以下之一）：
+3. 卡片模式（必须用以下之一）：
 
-   方案A - 彩色背景白字卡片：
+   方案A - 有色背景白字：
    <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6">
      <h3 class="text-white font-bold">标题</h3>
      <p class="text-white/90">内容</p>
    </div>
 
-   方案B - 白色容器卡片：
+   方案B - 白色容器模式：
    <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-1">
      <div class="bg-white/95 backdrop-blur rounded-2xl p-6">
        <h3 class="text-gray-900 font-bold">标题</h3>
@@ -181,69 +201,65 @@ def generate_visual_story(input_file: str, output_file: str = None) -> bool:
      </div>
    </div>
 
-严禁使用：
+禁止：
 - 在有色背景上用 text-gray-XXX
 - 在有色背景上用 text-black
-- 在任何渐变背景上用深色文字
-- 未明确指定颜色类的文本
+- 在任何渐变上用深色文本
+- 未明确指定文本颜色
 
-关键数据准确性规范：
+【关键数据准确性规则】：
 
 1. 静态与动画数字：
-   - 对于关键数据点，立即显示最终值
-   - 只在确保动画能正常工作时才使用动画
-   - 优先使用静态显示而非有风险的动画
+   - 关键数据点必须直接显示最终值
+   - 仅在动画可靠时才用动画
+   - 优先静态显示，避免动画出错
 
-2. ALPINE.JS 数据实现：
-   使用更简单的模式代替复杂动画：
-   
-   不推荐 (可能显示0)：
-   <div x-data="{{ count: 0, target: 7 }}" x-init="animate...">
-     <span x-text="count + '%'">0%</span>
-   </div>
-   
-   推荐 (始终显示正确值)：
-   <div x-data="{{ value: 7 }}">
-     <span x-text="value + '%'">7%</span>
-   </div>
-   
-   更佳 (带简单淡入效果)：
-   <div x-data="{{ show: false }}" x-init="setTimeout(() => show = true, 500)" 
-        x-show="show" x-transition>
-     <span class="text-3xl font-bold">7%</span>
-   </div>
+2. Alpine.js 数据实现：
+   - 用更简单的动画模式替代复杂动画
+   - 错误示例（可能显示为0）：
+<div x-data="{{ count: 0, target: 7 }}" x-init="animate...">
+  <span x-text="count + '%'">0%</span>
+</div>
+   - 正确示例（始终显示正确值）：
+<div x-data="{{ value: 7 }}">
+  <span x-text="value + '%'">7%</span>
+</div>
+   - 更佳示例（简单淡入）：
+<div x-data="{{ show: false }}" x-init="setTimeout(() => show = true, 500)" 
+     x-show="show" x-transition>
+  <span class="text-3xl font-bold">7%</span>
+</div>
 
-3. 后备值：
-   - 在HTML中始终包含实际值作为后备
-   - 示例：<span x-text="count + '%'">7%</span> (不要只写0%)
+3. 兜底值：
+   - HTML 中始终包含实际值作为兜底
+   - 示例：<span x-text="count + '%'">7%</span>（而不是仅显示0%）
 
-4. 数据验证清单：
-   ✓ 每个数字是否与源内容完全匹配？
-   ✓ JavaScript失效时数字是否可见？
-   ✓ 动画是否足够简单可靠？
+4. 数据核查清单：
+   ✓ 每个数字都与原文完全一致？
+   ✓ 即使 JavaScript 失效数字也可见？
+   ✓ 动画足够简单、可靠？
 
-5. 倾向使用简单方案：
-   - 使用CSS动画代替复杂的JavaScript
-   - 立即显示数字，仅为其他元素添加动画
-   - CSS计数器动画示例：
-   
-   @keyframes countUp {{
-     from {{ opacity: 0; transform: translateY(20px); }}
-     to {{ opacity: 1; transform: translateY(0); }}
-   }}
-   .number-animate {{
-     animation: countUp 0.8s ease-out;
-   }}
+5. 优先简单方案：
+   - 用 CSS 动画替代复杂 JS
+   - 数字先静态显示，动画仅作增强
+   - 示例 CSS 计数动画：
+@keyframes countUp {{
+  from {{ opacity: 0; transform: translateY(20px); }}
+  to {{ opacity: 1; transform: translateY(0); }}
+}}
+.number-animate {{
+  animation: countUp 0.8s ease-out;
+}}
 
-对于任何数值数据显示：
+任何数值展示：
 
-选项1 - 静态显示（推荐）：
+方案1 - 静态显示（推荐）：
 <div class="text-5xl font-bold text-blue-600">7%</div>
 
-选项2 - 简单显现：
+方案2 - 简单显现动画：
 <div class="text-5xl font-bold text-blue-600 number-animate">7%</div>
 
-选项3 - 如果必须使用 Alpine.js：
+方案3 - 必须用 Alpine.js 时：
 <div x-data="{{ value: 7, show: false }}" 
      x-init="setTimeout(() => show = true, 100)">
   <span class="text-5xl font-bold text-blue-600" 
@@ -251,21 +267,21 @@ def generate_visual_story(input_file: str, output_file: str = None) -> bool:
         x-text="value + '%'">7%</span>
 </div>
 
-切勿将空值或0作为默认值 - 始终显示正确的值！
+禁止留空或默认0——必须始终显示正确值！
 
-数据显示规则：
-- 首先以静态文本显示所有数字
-- 仅将动画作为增强功能
-- 不要依赖JavaScript来显示关键数据
-- 即使禁用JavaScript也必须能读取所有数字
+【数据展示规则】：
+- 所有数字先静态显示
+- 动画仅作增强
+- 关键数据可见性不能依赖 JS
+- 任何情况下数字都要可读
 
-检查每一张卡片：所有文字是否都清晰可读？所有数据是否准确?
+每张卡片都要检查：所有文本是否清晰可读？所有数据是否准确？
 
-风格应该摩登, 简约, 科幻
+整体风格要现代、极简、未来感。
 
-请仅返回 html 代码，不要包含其他文本。
+请只返回 html 代码，不要输出其他内容。
 
-以下是内容，请优美地展现这个故事：
+以下是内容，请用优美的方式讲述这个故事：
 
 {content}"""
         
