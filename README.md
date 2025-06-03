@@ -1,5 +1,10 @@
 # 🎧 PodLens - Intelligent Podcast & Youtube Transcription & Summary Tool
 
+[![Stars](https://img.shields.io/github/stars/512z/podlens?style=social)](https://github.com/512z/podlens)
+[![License](https://img.shields.io/github/license/512z/podlens)](LICENSE)
+[![PyPI version](https://badge.fury.io/py/podlens.svg)](https://badge.fury.io/py/podlens)
+[![Downloads](https://pepy.tech/badge/podlens)](https://pepy.tech/project/podlens)
+
 🧠 For knowledge-seekers who want to learn from audio content more effectively.
 
 A fast & cost-free & powerful tool that:
