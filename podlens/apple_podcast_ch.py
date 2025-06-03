@@ -448,15 +448,15 @@ class ApplePodcastExplorer:
         """
         try:
             print(f"🔧 正在压缩音频文件: {input_file.name}")
-            print("📊 压缩参数: 16KHz单声道, 64kbps MP3")
+            print("📊 压缩参数: 16KHz单声道, 24kbps MP3")
             
             # ffmpeg压缩命令
             cmd = [
                 'ffmpeg',
                 '-i', str(input_file),
-                '-ar', '16000',        # 降采样到16KHz
+                '-ar', '16000',        # 降采样到16KHz (MP3标准支持)
                 '-ac', '1',            # 单声道
-                '-b:a', '64k',         # 64kbps码率
+                '-b:a', '24k',         # 24kbps码率
                 '-y',                  # 覆盖输出文件
                 str(output_file)
             ]

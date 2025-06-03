@@ -336,14 +336,14 @@ class TranscriptExtractor:
         """Compress audio file below Groq API limit (copied from Apple section)"""
         try:
             print(f"🔧 Compressing audio file: {input_file.name}")
-            print("📊 Compression params: 16KHz mono, 64kbps MP3")
+            print("📊 Compression parameters: 16KHz mono, 24kbps MP3")
             
             cmd = [
                 'ffmpeg',
                 '-i', str(input_file),
                 '-ar', '16000',
                 '-ac', '1',
-                '-b:a', '64k',
+                '-b:a', '24k',
                 '-y',
                 str(output_file)
             ]

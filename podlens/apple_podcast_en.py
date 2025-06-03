@@ -447,15 +447,15 @@ class ApplePodcastExplorer:
         """
         try:
             print(f"🔧 Compressing audio file: {input_file.name}")
-            print("📊 Compression parameters: 16KHz mono, 64kbps MP3")
+            print("📊 Compression parameters: 16KHz mono, 24kbps MP3")
             
             # ffmpeg compression command
             cmd = [
                 'ffmpeg',
                 '-i', str(input_file),
-                '-ar', '16000',        # Downsample to 16KHz
+                '-ar', '16000',        # Downsample to 16KHz (MP3 standard support)
                 '-ac', '1',            # Mono
-                '-b:a', '64k',         # 64kbps bitrate
+                '-b:a', '24k',         # 24kbps bitrate
                 '-y',                  # Overwrite output file
                 str(output_file)
             ]
