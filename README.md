@@ -1,4 +1,4 @@
-# 🎧 PodLens - Free Agent Podcast & Youtube Transcription & Summary Tool
+# 🎧 PodLens - Free Podcast & Youtube Transcription & Summary AI Agent
 
 🧠 For knowledge-seekers who want to learn from audio content more effectively.
 
