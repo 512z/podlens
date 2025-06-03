@@ -122,6 +122,8 @@ NEVER:
 DATA VISUALIZATION REQUIREMENTS:
 When encountering numerical data in the content, create appropriate visualizations:
 
+First and foremost, the data used should be absolutely accurate from the source, if there are no data, then do not use any data.
+
 1. PERCENTAGE DATA (e.g., GDP growth, rates):
    - Use animated progress bars with gradient fills
    - Include percentage labels that count up on scroll

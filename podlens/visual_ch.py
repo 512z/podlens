@@ -127,6 +127,8 @@ def generate_visual_story(input_file: str, output_file: str = None) -> bool:
 数据可视化要求：
 遇到数字数据时，创建适当的可视化展示：
 
+首先，数据必须绝对准确，如果数据不存在，则不要使用任何数据。
+
 1. 百分比数据（如GDP增长、比率）：
    - 使用带渐变填充的动画进度条
    - 包含滚动时递增的百分比标签

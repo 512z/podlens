@@ -1,21 +1,12 @@
 # 🎧 PodLens - Intelligent Podcast & Youtube Transcription & Summary Tool
 
-```
-  ██████╗  ██████╗ ██████╗ ██╗     ███████╗███╗   ██╗███████╗
-  ██╔══██╗██╔═══██╗██╔══██╗██║     ██╔════╝████╗  ██║██╔════╝
-  ██████╔╝██║   ██║██║  ██║██║     █████╗  ██╔██╗ ██║███████╗
-  ██╔═══╝ ██║   ██║██║  ██║██║     ██╔══╝  ██║╚██╗██║╚════██║
-  ██║     ╚██████╔╝██████╔╝███████╗███████╗██║ ╚████║███████║
-  ╚═╝      ╚═════╝ ╚═════╝ ╚══════╝╚══════╝╚═╝  ╚═══╝╚══════╝
-```
+![Terminal Demo](terminal.gif)
 
 [中文版 README](README_zh.md) | **English README**
 
-For knowledge-seekers who want to learn from audio content more effectively.
+🧠 For knowledge-seekers who want to learn from audio content more effectively.
 
 A fast & cost-free & powerful podcast transcription and summarization tool that supports both Apple Podcast and YouTube platforms, featuring bilingual Chinese/English interface and integrating multiple AI technologies for high-quality audio transcription and intelligent summarization.
-
-![Terminal Demo](terminal.gif)
 
 
 ## ✨ Key Features
@@ -153,6 +144,9 @@ your-project/
 - **Professional Styling**: Glassmorphism effects, gradient accents, and Apple-inspired clean design
 - **Content Intelligence**: AI automatically identifies and visualizes key data points from transcripts and summaries
 - **Dual Input Support**: Generate visualizations from either transcripts or summaries
+
+
+![PodLens Visual Story Example](visual_demo.png)
 
 
 ## 📄 License
