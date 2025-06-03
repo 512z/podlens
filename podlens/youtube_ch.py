@@ -278,13 +278,41 @@ class TranscriptExtractor:
             self.groq_client = None
     
     def sanitize_filename(self, filename: str) -> str:
-        """Clean filename, remove unsafe characters (copied from Apple section)"""
+        """Clean filename, remove unsafe characters"""
         filename = re.sub(r'[<>:"/\\|?*]', '_', filename)
         filename = re.sub(r'\s+', '_', filename)
         filename = filename.strip('._')
         if len(filename) > 200:
             filename = filename[:200]
         return filename
+    
+    def ensure_filename_length(self, prefix: str, safe_title: str, extension: str = ".mp3") -> str:
+        """
+        确保完整文件名不超过文件系统限制（255字符）
+        
+        Args:
+            prefix: 文件前缀（例如："youtube_"）
+            safe_title: 清理后的标题
+            extension: 文件扩展名（默认：.mp3）
+        
+        Returns:
+            str: 符合长度限制的最终文件名
+        """
+        # 计算固定部分：前缀和扩展名
+        fixed_length = len(prefix) + len(extension)
+        
+        # 标题的最大可用长度
+        max_title_length = 255 - fixed_length
+        
+        # 如果标题能放下，直接使用
+        if len(safe_title) <= max_title_length:
+            return f"{prefix}{safe_title}{extension}"
+        
+        # 如果太长，截断标题
+        truncated_title = safe_title[:max_title_length]
+        final_filename = f"{prefix}{truncated_title}{extension}"
+        
+        return final_filename
     
     def get_file_size_mb(self, filepath):
         """Get file size (MB) (copied from Apple section)"""
@@ -302,7 +330,7 @@ class TranscriptExtractor:
         try:
             # Clean filename
             safe_title = self.sanitize_filename(title)
-            audio_filename = f"youtube_{safe_title}.mp3"
+            audio_filename = self.ensure_filename_length("youtube_", safe_title)
             audio_filepath = self.media_dir / audio_filename
             
             # Check if file already exists
@@ -345,7 +373,21 @@ class TranscriptExtractor:
             # 第一级压缩：64k (优先保证质量)
             print("📊 第一级压缩: 16KHz 单声道, 64kbps MP3")
             
-            temp_64k_file = output_file.parent / f"temp_64k_{output_file.name}"
+            # 生成安全的临时文件名，不超过255字符
+            original_name = output_file.stem  # 不含扩展名的文件名
+            prefix = "temp_64k_"
+            extension = output_file.suffix
+            
+            # 计算原文件名部分的最大长度
+            max_name_length = 255 - len(prefix) - len(extension)
+            
+            # 如果需要，截断原文件名
+            if len(original_name) > max_name_length:
+                safe_name = original_name[:max_name_length]
+            else:
+                safe_name = original_name
+            
+            temp_64k_file = output_file.parent / f"{prefix}{safe_name}{extension}"
             
             cmd_64k = [
                 'ffmpeg',
@@ -525,7 +567,19 @@ class TranscriptExtractor:
                 # Case 2: File > 25MB, need compression
                 print("⚠️  文件超出Groq限制，开始压缩...")
                 
-                compressed_file = audio_file.parent / f"compressed_{audio_file.name}"
+                # 生成安全的压缩文件名
+                original_name = audio_file.stem
+                compressed_name = f"compressed_{original_name}"
+                extension = audio_file.suffix
+                
+                # 确保压缩文件名不超出限制
+                max_compressed_length = 255 - len(extension)
+                if len(compressed_name) > max_compressed_length:
+                    # 截断以适合
+                    truncated_name = compressed_name[:max_compressed_length]
+                    compressed_file = audio_file.parent / f"{truncated_name}{extension}"
+                else:
+                    compressed_file = audio_file.parent / f"{compressed_name}{extension}"
                 
                 if self.compress_audio_file(audio_file, compressed_file):
                     compressed_size = self.get_file_size_mb(compressed_file)
@@ -792,11 +846,9 @@ class TranscriptExtractor:
     
     def save_transcript(self, transcript: str, title: str) -> str:
         """Save transcript to file"""
-        # Sanitize filename
-        safe_title = re.sub(r'[^\w\s-]', '', title).strip()
-        safe_title = re.sub(r'[-\s]+', '-', safe_title)
-        
-        transcript_path = self.output_dir / f"Transcript_{safe_title}.md"
+        # Build path
+        safe_title = self.sanitize_filename(title)
+        transcript_path = self.output_dir / self.ensure_transcript_filename_length(safe_title)
         
         with open(transcript_path, 'w', encoding='utf-8') as f:
             f.write(f"# Transcript: {title}\n\n")
@@ -805,6 +857,51 @@ class TranscriptExtractor:
             f.write(transcript)
         
         return str(transcript_path)
+
+    def ensure_output_filename_length(self, prefix: str, safe_title: str, extension: str = ".md") -> str:
+        """
+        确保输出文件名（转录/摘要）不超过文件系统限制（255字符）
+        YouTube格式：prefix + title + extension（无频道名）
+        
+        Args:
+            prefix: 文件前缀（如"Transcript_", "Summary_"）
+            safe_title: 清理后的标题
+            extension: 文件扩展名（默认：.md）
+        
+        Returns:
+            str: 符合长度限制的最终文件名
+        """
+        # 计算固定部分长度：前缀 + 扩展名
+        fixed_length = len(prefix) + len(extension)
+        
+        # 最大可用内容长度
+        max_content_length = 255 - fixed_length
+        
+        if len(safe_title) <= max_content_length:
+            return f"{prefix}{safe_title}{extension}"
+        else:
+            truncated_title = safe_title[:max_content_length]
+            return f"{prefix}{truncated_title}{extension}"
+    
+    def ensure_transcript_filename_length(self, safe_title: str) -> str:
+        """确保转录文件名长度"""
+        return self.ensure_output_filename_length("Transcript_", safe_title)
+    
+    def ensure_summary_filename_length(self, safe_title: str) -> str:
+        """Ensure summary filename length"""
+        # Calculate fixed parts length: prefix + extension
+        prefix = "Summary_"
+        extension = ".md"
+        fixed_length = len(prefix) + len(extension)
+        
+        # Maximum available length for content
+        max_content_length = 255 - fixed_length
+        
+        if len(safe_title) <= max_content_length:
+            return f"{prefix}{safe_title}{extension}"
+        else:
+            truncated_title = safe_title[:max_content_length]
+            return f"{prefix}{truncated_title}{extension}"
 
 
 class SummaryGenerator:
@@ -892,13 +989,37 @@ class SummaryGenerator:
             print(f"翻译为中文出错: {e}")
             return None
     
+    def sanitize_filename(self, filename: str) -> str:
+        """Clean filename, remove unsafe characters"""
+        filename = re.sub(r'[<>:"/\\|?*]', '_', filename)
+        filename = re.sub(r'\s+', '_', filename)
+        filename = filename.strip('._')
+        if len(filename) > 200:
+            filename = filename[:200]
+        return filename
+    
+    def ensure_summary_filename_length(self, safe_title: str) -> str:
+        """Ensure summary filename length"""
+        # Calculate fixed parts length: prefix + extension
+        prefix = "Summary_"
+        extension = ".md"
+        fixed_length = len(prefix) + len(extension)
+        
+        # Maximum available length for content
+        max_content_length = 255 - fixed_length
+        
+        if len(safe_title) <= max_content_length:
+            return f"{prefix}{safe_title}{extension}"
+        else:
+            truncated_title = safe_title[:max_content_length]
+            return f"{prefix}{truncated_title}{extension}"
+    
     def save_summary(self, summary: str, title: str, output_dir: Path) -> str:
         """Save summary to file"""
         # Sanitize filename
-        safe_title = re.sub(r'[^\w\s-]', '', title).strip()
-        safe_title = re.sub(r'[-\s]+', '-', safe_title)
+        safe_title = self.sanitize_filename(title)
         
-        summary_path = output_dir / f"Summary_{safe_title}.md"
+        summary_path = output_dir / self.ensure_summary_filename_length(safe_title)
         
         with open(summary_path, 'w', encoding='utf-8') as f:
             f.write(f"# Summary: {title}\n\n")
@@ -1277,11 +1398,11 @@ You can:
             
             if content_choice == 't':
                 # Use transcript
-                source_filename = f"Transcript_{safe_title}.md"
+                source_filename = self.extractor.ensure_transcript_filename_length(safe_title)
                 content_type = "转录文本"
             else:
                 # Use summary
-                source_filename = f"Summary_{safe_title}.md"
+                source_filename = self.extractor.ensure_summary_filename_length(safe_title)
                 content_type = "摘要"
             
             source_filepath = self.extractor.output_dir / source_filename

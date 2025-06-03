@@ -361,6 +361,129 @@ class ApplePodcastExplorer:
         
         return filename
     
+    def ensure_filename_length(self, safe_channel: str, episode_num: int, safe_title: str, extension: str = ".mp3") -> str:
+        """
+        Ensure the complete filename doesn't exceed filesystem limits (255 characters)
+        
+        Args:
+            safe_channel: Sanitized channel name
+            episode_num: Episode number
+            safe_title: Sanitized episode title
+            extension: File extension (default: .mp3)
+        
+        Returns:
+            str: Final filename that fits within length limits
+        """
+        # Calculate the fixed parts: episode number, underscores, and extension
+        fixed_part = f"_{episode_num:02d}_"  # e.g. "_01_"
+        fixed_length = len(fixed_part) + len(extension)  # e.g. 4 + 4 = 8
+        
+        # Maximum available length for channel and title
+        max_content_length = 255 - fixed_length  # e.g. 255 - 8 = 247
+        
+        # If both channel and title fit, use them as is
+        combined_length = len(safe_channel) + len(safe_title)
+        if combined_length <= max_content_length:
+            return f"{safe_channel}{fixed_part}{safe_title}{extension}"
+        
+        # If too long, distribute the available space
+        # Give priority to the title, but ensure both have minimum representation
+        min_channel_length = 20  # Minimum characters for channel name
+        min_title_length = 30    # Minimum characters for title
+        
+        # If even minimums don't fit, truncate more aggressively
+        if min_channel_length + min_title_length > max_content_length:
+            # Split available space equally
+            half_space = max_content_length // 2
+            truncated_channel = safe_channel[:half_space]
+            truncated_title = safe_title[:max_content_length - len(truncated_channel)]
+        else:
+            # Try to preserve more of the title
+            remaining_space = max_content_length - min_channel_length
+            if len(safe_title) <= remaining_space:
+                # Title fits, truncate channel
+                truncated_title = safe_title
+                truncated_channel = safe_channel[:max_content_length - len(safe_title)]
+            else:
+                # Both need truncation
+                truncated_channel = safe_channel[:min_channel_length]
+                truncated_title = safe_title[:max_content_length - min_channel_length]
+        
+        final_filename = f"{truncated_channel}{fixed_part}{truncated_title}{extension}"
+        
+        # Safety check
+        if len(final_filename) > 255:
+            # Emergency truncation
+            emergency_title = safe_title[:255 - fixed_length - min_channel_length]
+            emergency_channel = safe_channel[:min_channel_length]
+            final_filename = f"{emergency_channel}{fixed_part}{emergency_title}{extension}"
+        
+        return final_filename
+    
+    def ensure_output_filename_length(self, prefix: str, safe_channel: str, safe_title: str, extension: str = ".md") -> str:
+        """
+        Ensure output filenames (transcript/summary) don't exceed filesystem limits (255 characters)
+        
+        Args:
+            prefix: File prefix (e.g., "Transcript_", "Summary_")
+            safe_channel: Sanitized channel name (can be empty for YouTube)
+            safe_title: Sanitized title
+            extension: File extension (default: .md)
+        
+        Returns:
+            str: Final filename that fits within length limits
+        """
+        # Calculate fixed parts length: prefix + extension
+        fixed_length = len(prefix) + len(extension)
+        
+        # Maximum available length for content
+        max_content_length = 255 - fixed_length
+        
+        # If no channel (YouTube format)
+        if not safe_channel:
+            if len(safe_title) <= max_content_length:
+                return f"{prefix}{safe_title}{extension}"
+            else:
+                truncated_title = safe_title[:max_content_length]
+                return f"{prefix}{truncated_title}{extension}"
+        
+        # Apple Podcast format: prefix + channel + "_" + title + extension
+        separator = "_"
+        combined_content = f"{safe_channel}{separator}{safe_title}"
+        
+        if len(combined_content) <= max_content_length:
+            return f"{prefix}{combined_content}{extension}"
+        
+        # Need truncation: prioritize title but ensure channel has minimum representation
+        min_channel_length = 15
+        min_title_length = 20
+        
+        if min_channel_length + len(separator) + min_title_length > max_content_length:
+            # Extreme case: split available space
+            available_space = max_content_length - len(separator)
+            half_space = available_space // 2
+            truncated_channel = safe_channel[:half_space]
+            truncated_title = safe_title[:available_space - len(truncated_channel)]
+        else:
+            # Normal case: prioritize title
+            remaining_space = max_content_length - min_channel_length - len(separator)
+            if len(safe_title) <= remaining_space:
+                truncated_title = safe_title
+                truncated_channel = safe_channel[:max_content_length - len(separator) - len(safe_title)]
+            else:
+                truncated_channel = safe_channel[:min_channel_length]
+                truncated_title = safe_title[:max_content_length - len(separator) - min_channel_length]
+        
+        return f"{prefix}{truncated_channel}{separator}{truncated_title}{extension}"
+    
+    def ensure_transcript_filename_length(self, safe_channel: str, safe_title: str) -> str:
+        """Ensure transcript filename length"""
+        return self.ensure_output_filename_length("Transcript_", safe_channel, safe_title)
+    
+    def ensure_summary_filename_length(self, safe_channel: str, safe_title: str) -> str:
+        """Ensure summary filename length"""
+        return self.ensure_output_filename_length("Summary_", safe_channel, safe_title)
+    
     def download_episode(self, episode: Dict, episode_num: int, channel_name: str) -> bool:
         """
         Download a single episode
@@ -381,7 +504,7 @@ class ApplePodcastExplorer:
             # Build filename
             safe_channel = self.sanitize_filename(channel_name)
             safe_title = self.sanitize_filename(episode['title'])
-            filename = f"{safe_channel}_{episode_num:02d}_{safe_title}.mp3"
+            filename = self.ensure_filename_length(safe_channel, episode_num, safe_title)
             filepath = self.media_dir / filename
             
             # Check if file already exists
@@ -452,7 +575,21 @@ class ApplePodcastExplorer:
             # First level compression: 64k (prioritize quality)
             print("📊 First level compression: 16KHz mono, 64kbps MP3")
             
-            temp_64k_file = output_file.parent / f"temp_64k_{output_file.name}"
+            # Generate safe temporary filename that doesn't exceed 255 chars
+            original_name = output_file.stem  # filename without extension
+            prefix = "temp_64k_"
+            extension = output_file.suffix
+            
+            # Calculate max length for original name part
+            max_name_length = 255 - len(prefix) - len(extension)
+            
+            # Truncate original name if needed
+            if len(original_name) > max_name_length:
+                safe_name = original_name[:max_name_length]
+            else:
+                safe_name = original_name
+            
+            temp_64k_file = output_file.parent / f"{prefix}{safe_name}{extension}"
             
             cmd_64k = [
                 'ffmpeg',
@@ -636,7 +773,7 @@ class ApplePodcastExplorer:
             # Build transcript filename
             safe_channel = self.sanitize_filename(channel_name)
             safe_title = self.sanitize_filename(episode_title)
-            transcript_filename = f"Transcript_{safe_channel}_{safe_title}.md"
+            transcript_filename = self.ensure_transcript_filename_length(safe_channel, safe_title)
             transcript_filepath = self.transcript_dir / transcript_filename
             
             # Check if transcript file already exists
@@ -671,7 +808,19 @@ class ApplePodcastExplorer:
                 # Case 2: File > 25MB, need compression
                 print("⚠️  File exceeds Groq limit, starting compression...")
                 
-                compressed_file = audio_file.parent / f"compressed_{audio_file.name}"
+                # Generate safe compressed filename
+                original_name = audio_file.stem
+                compressed_name = f"compressed_{original_name}"
+                extension = audio_file.suffix
+                
+                # Ensure compressed filename doesn't exceed limits
+                max_compressed_length = 255 - len(extension)
+                if len(compressed_name) > max_compressed_length:
+                    # Truncate to fit
+                    truncated_name = compressed_name[:max_compressed_length]
+                    compressed_file = audio_file.parent / f"{truncated_name}{extension}"
+                else:
+                    compressed_file = audio_file.parent / f"{compressed_name}{extension}"
                 
                 if self.compress_audio_file(audio_file, compressed_file):
                     compressed_size = self.get_file_size_mb(compressed_file)
@@ -805,7 +954,7 @@ class ApplePodcastExplorer:
                 # Build downloaded file path
                 safe_channel = self.sanitize_filename(channel_name)
                 safe_title = self.sanitize_filename(episode['title'])
-                filename = f"{safe_channel}_{episode_num:02d}_{safe_title}.mp3"
+                filename = self.ensure_filename_length(safe_channel, episode_num, safe_title)
                 downloaded_files.append((self.media_dir / filename, episode['title']))
         
         # Show download summary
@@ -881,7 +1030,7 @@ class ApplePodcastExplorer:
                         # Read transcript file
                         safe_channel = self.sanitize_filename(channel_name)
                         safe_title = self.sanitize_filename(episode_title)
-                        transcript_filename = f"Transcript_{safe_channel}_{safe_title}.md"
+                        transcript_filename = self.ensure_transcript_filename_length(safe_channel, safe_title)
                         transcript_filepath = self.transcript_dir / transcript_filename
                         
                         if not transcript_filepath.exists():
@@ -934,7 +1083,6 @@ class ApplePodcastExplorer:
                                 summary_success_count += 1
                             else:
                                 print("❌ Failed to save summary")
-                                
                         except Exception as e:
                             print(f"❌ Error processing summary: {e}")
                             continue
@@ -1001,11 +1149,11 @@ class ApplePodcastExplorer:
             
             if content_choice == 't':
                 # Use transcript
-                source_filename = f"Transcript_{safe_channel}_{safe_title}.md"
+                source_filename = self.ensure_transcript_filename_length(safe_channel, safe_title)
                 content_type = "transcript"
             else:
                 # Use summary
-                source_filename = f"Summary_{safe_channel}_{safe_title}.md"
+                source_filename = self.ensure_summary_filename_length(safe_channel, safe_title)
                 content_type = "summary"
             
             source_filepath = self.transcript_dir / source_filename
@@ -1109,30 +1257,29 @@ class ApplePodcastExplorer:
         except Exception as e:
             print(f"❌ Translation failed: {e}")
             return None
-    
-    def save_summary(self, summary: str, title: str, channel_name: str, language: str = "en") -> str:
+
+    def save_summary(self, summary: str, episode_title: str, channel_name: str, language: str) -> Optional[str]:
         """
         Save summary to file
         
         Args:
-            summary: Summary content
-            title: Episode title
+            summary: Generated summary
+            episode_title: Episode title
             channel_name: Channel name
-            language: Language identifier
+            language: Language preference
         
         Returns:
-            str: Saved file path
+            Optional[str]: Path to saved summary file, None if failed
         """
         try:
-            # Build summary filename
+            # Build summary filename using the new length control function
             safe_channel = self.sanitize_filename(channel_name)
-            safe_title = self.sanitize_filename(title)
-            lang_suffix = "_zh" if language == "ch" else "_en"
-            summary_filename = f"Summary_{safe_channel}_{safe_title}.md"
+            safe_title = self.sanitize_filename(episode_title)
+            summary_filename = self.ensure_summary_filename_length(safe_channel, safe_title)
             summary_filepath = self.transcript_dir / summary_filename
             
             with open(summary_filepath, 'w', encoding='utf-8') as f:
-                f.write(f"# Summary: {title}\n\n" if language == "en" else f"# 摘要: {title}\n\n")
+                f.write(f"# Summary: {episode_title}\n\n" if language == "en" else f"# 摘要: {episode_title}\n\n")
                 f.write(f"**Channel:** {channel_name}\n\n" if language == "en" else f"**频道:** {channel_name}\n\n")
                 f.write(f"**Summary Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n" if language == "en" else f"**摘要生成时间:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
                 f.write(f"**Language:** {'English' if language == 'en' else 'Chinese'}\n\n")

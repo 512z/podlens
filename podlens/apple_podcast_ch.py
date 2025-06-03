@@ -362,6 +362,65 @@ class ApplePodcastExplorer:
         
         return filename
     
+    def ensure_filename_length(self, safe_channel: str, episode_num: int, safe_title: str, extension: str = ".mp3") -> str:
+        """
+        确保完整文件名不超过文件系统限制（255字符）
+        
+        Args:
+            safe_channel: 清理后的频道名
+            episode_num: 剧集编号
+            safe_title: 清理后的剧集标题
+            extension: 文件扩展名（默认：.mp3）
+        
+        Returns:
+            str: 符合长度限制的最终文件名
+        """
+        # 计算固定部分：剧集编号、下划线和扩展名
+        fixed_part = f"_{episode_num:02d}_"  # 例如 "_01_"
+        fixed_length = len(fixed_part) + len(extension)  # 例如 4 + 4 = 8
+        
+        # 频道名和标题的最大可用长度
+        max_content_length = 255 - fixed_length  # 例如 255 - 8 = 247
+        
+        # 如果频道名和标题都能放下，直接使用
+        combined_length = len(safe_channel) + len(safe_title)
+        if combined_length <= max_content_length:
+            return f"{safe_channel}{fixed_part}{safe_title}{extension}"
+        
+        # 如果太长，分配可用空间
+        # 优先保留标题，但确保频道名也有最小表示
+        min_channel_length = 20  # 频道名最小字符数
+        min_title_length = 30    # 标题最小字符数
+        
+        # 如果连最小值都放不下，更激进地截断
+        if min_channel_length + min_title_length > max_content_length:
+            # 平分可用空间
+            half_space = max_content_length // 2
+            truncated_channel = safe_channel[:half_space]
+            truncated_title = safe_title[:max_content_length - len(truncated_channel)]
+        else:
+            # 尝试保留更多标题
+            remaining_space = max_content_length - min_channel_length
+            if len(safe_title) <= remaining_space:
+                # 标题能放下，截断频道名
+                truncated_title = safe_title
+                truncated_channel = safe_channel[:max_content_length - len(safe_title)]
+            else:
+                # 两者都需要截断
+                truncated_channel = safe_channel[:min_channel_length]
+                truncated_title = safe_title[:max_content_length - min_channel_length]
+        
+        final_filename = f"{truncated_channel}{fixed_part}{truncated_title}{extension}"
+        
+        # 安全检查
+        if len(final_filename) > 255:
+            # 紧急截断
+            emergency_title = safe_title[:255 - fixed_length - min_channel_length]
+            emergency_channel = safe_channel[:min_channel_length]
+            final_filename = f"{emergency_channel}{fixed_part}{emergency_title}{extension}"
+        
+        return final_filename
+    
     def download_episode(self, episode: Dict, episode_num: int, channel_name: str) -> bool:
         """
         下载单个剧集
@@ -382,7 +441,7 @@ class ApplePodcastExplorer:
             # 构建文件名
             safe_channel = self.sanitize_filename(channel_name)
             safe_title = self.sanitize_filename(episode['title'])
-            filename = f"{safe_channel}_{episode_num:02d}_{safe_title}.mp3"
+            filename = self.ensure_filename_length(safe_channel, episode_num, safe_title)
             filepath = self.media_dir / filename
             
             # 检查文件是否已存在
@@ -453,7 +512,21 @@ class ApplePodcastExplorer:
             # 第一级压缩：64k (优先保证质量)
             print("📊 第一级压缩: 16KHz单声道, 64kbps MP3")
             
-            temp_64k_file = output_file.parent / f"temp_64k_{output_file.name}"
+            # 生成安全的临时文件名，不超过255字符
+            original_name = output_file.stem  # 不含扩展名的文件名
+            prefix = "temp_64k_"
+            extension = output_file.suffix
+            
+            # 计算原文件名部分的最大长度
+            max_name_length = 255 - len(prefix) - len(extension)
+            
+            # 如果需要，截断原文件名
+            if len(original_name) > max_name_length:
+                safe_name = original_name[:max_name_length]
+            else:
+                safe_name = original_name
+            
+            temp_64k_file = output_file.parent / f"{prefix}{safe_name}{extension}"
             
             cmd_64k = [
                 'ffmpeg',
@@ -637,7 +710,7 @@ class ApplePodcastExplorer:
             # 构建转录文件名
             safe_channel = self.sanitize_filename(channel_name)
             safe_title = self.sanitize_filename(episode_title)
-            transcript_filename = f"Transcript_{safe_channel}_{safe_title}.md"
+            transcript_filename = self.ensure_transcript_filename_length(safe_channel, safe_title)
             transcript_filepath = self.transcript_dir / transcript_filename
             
             # 检查转录文件是否已存在
@@ -672,7 +745,19 @@ class ApplePodcastExplorer:
                 # 情况2: 文件>25MB, 需压缩
                 print("⚠️  文件超出Groq限制，开始压缩...")
                 
-                compressed_file = audio_file.parent / f"compressed_{audio_file.name}"
+                # 生成安全的压缩文件名
+                original_name = audio_file.stem
+                compressed_name = f"compressed_{original_name}"
+                extension = audio_file.suffix
+                
+                # 确保压缩文件名不超出限制
+                max_compressed_length = 255 - len(extension)
+                if len(compressed_name) > max_compressed_length:
+                    # 截断以适合
+                    truncated_name = compressed_name[:max_compressed_length]
+                    compressed_file = audio_file.parent / f"{truncated_name}{extension}"
+                else:
+                    compressed_file = audio_file.parent / f"{compressed_name}{extension}"
                 
                 if self.compress_audio_file(audio_file, compressed_file):
                     compressed_size = self.get_file_size_mb(compressed_file)
@@ -801,7 +886,7 @@ class ApplePodcastExplorer:
                 # 构建已下载文件路径
                 safe_channel = self.sanitize_filename(channel_name)
                 safe_title = self.sanitize_filename(episode['title'])
-                filename = f"{safe_channel}_{episode_num:02d}_{safe_title}.mp3"
+                filename = self.ensure_filename_length(safe_channel, episode_num, safe_title)
                 downloaded_files.append((self.media_dir / filename, episode['title']))
         
         # 显示下载汇总
@@ -877,7 +962,7 @@ class ApplePodcastExplorer:
                         # 读取转录文件
                         safe_channel = self.sanitize_filename(channel_name)
                         safe_title = self.sanitize_filename(episode_title)
-                        transcript_filename = f"Transcript_{safe_channel}_{safe_title}.md"
+                        transcript_filename = self.ensure_transcript_filename_length(safe_channel, safe_title)
                         transcript_filepath = self.transcript_dir / transcript_filename
                         
                         if not transcript_filepath.exists():
@@ -999,11 +1084,11 @@ class ApplePodcastExplorer:
             
             if content_choice == 't':
                 # Use transcript
-                source_filename = f"Transcript_{safe_channel}_{safe_title}.md"
+                source_filename = self.ensure_transcript_filename_length(safe_channel, safe_title)
                 content_type = "转录文本"
             else:
                 # Use summary
-                source_filename = f"Summary_{safe_channel}_{safe_title}.md"
+                source_filename = self.ensure_summary_filename_length(safe_channel, safe_title)
                 content_type = "摘要"
             
             source_filepath = self.transcript_dir / source_filename
@@ -1125,7 +1210,7 @@ class ApplePodcastExplorer:
             # 构建摘要文件名
             safe_channel = self.sanitize_filename(channel_name)
             safe_title = self.sanitize_filename(title)
-            summary_filename = f"Summary_{safe_channel}_{safe_title}.md"
+            summary_filename = self.ensure_summary_filename_length(safe_channel, safe_title)
             summary_filepath = self.transcript_dir / summary_filename
             
             with open(summary_filepath, 'w', encoding='utf-8') as f:
@@ -1142,3 +1227,67 @@ class ApplePodcastExplorer:
         except Exception as e:
             print(f"❌ 摘要保存失败: {e}")
             return None
+
+    def ensure_output_filename_length(self, prefix: str, safe_channel: str, safe_title: str, extension: str = ".md") -> str:
+        """
+        确保输出文件名（转录/摘要）不超过文件系统限制（255字符）
+        
+        Args:
+            prefix: 文件前缀（如"Transcript_", "Summary_"）
+            safe_channel: 清理后的频道名（YouTube可能为空）
+            safe_title: 清理后的标题
+            extension: 文件扩展名（默认：.md）
+        
+        Returns:
+            str: 符合长度限制的最终文件名
+        """
+        # 计算固定部分长度：前缀 + 扩展名
+        fixed_length = len(prefix) + len(extension)
+        
+        # 最大可用内容长度
+        max_content_length = 255 - fixed_length
+        
+        # 如果没有频道名（YouTube格式）
+        if not safe_channel:
+            if len(safe_title) <= max_content_length:
+                return f"{prefix}{safe_title}{extension}"
+            else:
+                truncated_title = safe_title[:max_content_length]
+                return f"{prefix}{truncated_title}{extension}"
+        
+        # Apple Podcast格式：prefix + channel + "_" + title + extension
+        separator = "_"
+        combined_content = f"{safe_channel}{separator}{safe_title}"
+        
+        if len(combined_content) <= max_content_length:
+            return f"{prefix}{combined_content}{extension}"
+        
+        # 需要截断：优先保留标题，但确保频道名有最小表示
+        min_channel_length = 15
+        min_title_length = 20
+        
+        if min_channel_length + len(separator) + min_title_length > max_content_length:
+            # 极端情况：分割可用空间
+            available_space = max_content_length - len(separator)
+            half_space = available_space // 2
+            truncated_channel = safe_channel[:half_space]
+            truncated_title = safe_title[:available_space - len(truncated_channel)]
+        else:
+            # 正常情况：优先保留标题
+            remaining_space = max_content_length - min_channel_length - len(separator)
+            if len(safe_title) <= remaining_space:
+                truncated_title = safe_title
+                truncated_channel = safe_channel[:max_content_length - len(separator) - len(safe_title)]
+            else:
+                truncated_channel = safe_channel[:min_channel_length]
+                truncated_title = safe_title[:max_content_length - len(separator) - min_channel_length]
+        
+        return f"{prefix}{truncated_channel}{separator}{truncated_title}{extension}"
+    
+    def ensure_transcript_filename_length(self, safe_channel: str, safe_title: str) -> str:
+        """确保转录文件名长度"""
+        return self.ensure_output_filename_length("Transcript_", safe_channel, safe_title)
+    
+    def ensure_summary_filename_length(self, safe_channel: str, safe_title: str) -> str:
+        """确保摘要文件名长度"""
+        return self.ensure_output_filename_length("Summary_", safe_channel, safe_title)

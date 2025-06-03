@@ -56,7 +56,16 @@ def generate_visual_story(input_file: str, output_file: str = None) -> bool:
         if output_file is None:
             # Extract filename without extension and add _visual suffix
             base_name = input_path.stem
-            output_file = input_path.parent / f"Visual_{base_name}.html"
+            
+            # Ensure the Visual_ prefix + base_name + .html doesn't exceed 255 chars
+            prefix = "Visual_"
+            extension = ".html"
+            max_base_length = 255 - len(prefix) - len(extension)
+            
+            if len(base_name) > max_base_length:
+                base_name = base_name[:max_base_length]
+            
+            output_file = input_path.parent / f"{prefix}{base_name}{extension}"
         
         # Read content
         print(f"📖 Reading content: {input_file}")
