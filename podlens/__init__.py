@@ -53,6 +53,19 @@ def get_english_version():
         'Podnet': Podnet_EN
     }
 
+# 自动化接口导入 / Automation interface imports
+from .automation import (
+    PodlensAutomation,
+    process_apple_podcast_auto,
+    process_youtube_auto
+)
+
+# 后台服务导入 / Background service imports
+from .background import (
+    BackgroundService,
+    PodcastListManager
+)
+
 # 公开的API / Public API
 __all__ = [
     # 中文版 / Chinese version
@@ -78,5 +91,14 @@ __all__ = [
     
     # 辅助函数 / Helper functions
     'get_chinese_version',
-    'get_english_version'
+    'get_english_version',
+    
+    # 自动化接口 / Automation interface
+    'PodlensAutomation',
+    'process_apple_podcast_auto',
+    'process_youtube_auto',
+    
+    # 后台服务 / Background service
+    'BackgroundService',
+    'PodcastListManager'
 ] 

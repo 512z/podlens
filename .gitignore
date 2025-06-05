@@ -48,3 +48,6 @@ Thumbs.db
 # Project specific
 outputs/
 *.log
+
+.podcast_progress.json
+.podlist
