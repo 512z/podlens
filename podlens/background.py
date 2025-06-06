@@ -21,14 +21,15 @@ from .automation import PodlensAutomation
 class PodcastListManager:
     """播客列表管理器"""
     
-    def __init__(self, list_file: str = ".podlist"):
+    def __init__(self, podlens_dir: Path):
         """
         初始化播客列表管理器
         
         Args:
-            list_file: 播客列表文件路径
+            podlens_dir: .podlens 目录路径
         """
-        self.list_file = Path(list_file)
+        self.podlens_dir = podlens_dir
+        self.list_file = podlens_dir / "podlist"
         self.ensure_list_file()
     
     def ensure_list_file(self):
@@ -101,8 +102,15 @@ class PodcastListManager:
 class PodcastProgressTracker:
     """播客进度跟踪器"""
     
-    def __init__(self, progress_file: str = ".podcast_progress.json"):
-        self.progress_file = Path(progress_file)
+    def __init__(self, podlens_dir: Path):
+        """
+        初始化播客进度跟踪器
+        
+        Args:
+            podlens_dir: .podlens 目录路径
+        """
+        self.podlens_dir = podlens_dir
+        self.progress_file = podlens_dir / "progress.json"
         self.podcast_progress = self.load_progress()
     
     def load_progress(self) -> Dict:
@@ -160,32 +168,155 @@ class BackgroundService:
             language: 处理语言
         """
         self.language = language
+        
+        # 创建 .podlens 系统目录
+        self.podlens_dir = Path(".podlens")
+        self.setup_podlens_directory()
+        
+        # 初始化各个组件
         self.automation = PodlensAutomation(language=language)
-        self.list_manager = PodcastListManager()
-        self.progress_tracker = PodcastProgressTracker()
+        self.list_manager = PodcastListManager(self.podlens_dir)
+        self.progress_tracker = PodcastProgressTracker(self.podlens_dir)
         self.is_running = False
         
         # 设置日志
         self.setup_logging()
         
         # 创建状态文件
-        self.status_file = Path("podlens_status.json")
+        self.status_file = self.podlens_dir / "status.json"
         self.load_global_status()
+    
+    def setup_podlens_directory(self):
+        """设置 .podlens 系统目录"""
+        try:
+            self.podlens_dir.mkdir(exist_ok=True)
+            
+            # 创建子目录
+            (self.podlens_dir / "logs").mkdir(exist_ok=True)
+            (self.podlens_dir / "temp").mkdir(exist_ok=True)
+            
+            # 迁移旧文件到新目录
+            self._migrate_old_files()
+            
+            # 创建 README 文件说明目录结构
+            readme_file = self.podlens_dir / "README.md"
+            if not readme_file.exists():
+                readme_content = """# PodLens 系统目录
+
+这个目录包含 PodLens 后台服务的所有系统文件。
+
+## 文件说明
+
+- `podlist`: 播客订阅列表
+- `progress.json`: 播客处理进度跟踪
+- `status.json`: 全局服务状态
+- `logs/`: 日志文件目录
+  - `background.log`: 后台服务日志
+- `temp/`: 临时文件目录
+
+## 注意事项
+
+- 请勿手动修改 `progress.json` 和 `status.json` 文件
+- 可以手动编辑 `podlist` 文件来管理播客订阅
+- 日志文件会自动轮转，避免占用过多空间
+"""
+                with open(readme_file, 'w', encoding='utf-8') as f:
+                    f.write(readme_content)
+            
+            print(f"📁 PodLens 系统目录已创建: {self.podlens_dir.absolute()}")
+            
+        except Exception as e:
+            print(f"❌ 创建 .podlens 目录失败: {e}")
+            raise
+    
+    def _migrate_old_files(self):
+        """迁移旧的配置文件到新目录"""
+        old_files = {
+            ".podlist": "podlist",
+            ".podcast_progress.json": "progress.json", 
+            "podlens_status.json": "status.json"
+        }
+        
+        migrated_files = []
+        
+        for old_file, new_file in old_files.items():
+            old_path = Path(old_file)
+            new_path = self.podlens_dir / new_file
+            
+            if old_path.exists() and not new_path.exists():
+                try:
+                    # 复制文件内容
+                    import shutil
+                    shutil.copy2(old_path, new_path)
+                    
+                    # 删除旧文件
+                    old_path.unlink()
+                    migrated_files.append(f"{old_file} -> .podlens/{new_file}")
+                    
+                except Exception as e:
+                    print(f"⚠️  迁移文件 {old_file} 失败: {e}")
+        
+        if migrated_files:
+            print("📦 已迁移旧配置文件:")
+            for migration in migrated_files:
+                print(f"  {migration}")
+        
+        # 迁移旧的日志目录
+        old_logs_dir = Path("logs")
+        new_logs_dir = self.podlens_dir / "logs"
+        
+        if old_logs_dir.exists() and old_logs_dir.is_dir():
+            try:
+                # 移动日志文件
+                for log_file in old_logs_dir.glob("*.log"):
+                    new_log_path = new_logs_dir / log_file.name
+                    if not new_log_path.exists():
+                        import shutil
+                        shutil.move(str(log_file), str(new_log_path))
+                        print(f"📄 已迁移日志文件: {log_file.name}")
+                
+                # 如果旧目录为空，删除它
+                if not any(old_logs_dir.iterdir()):
+                    old_logs_dir.rmdir()
+                    print(f"🗑️  已删除空的旧日志目录: logs/")
+                    
+            except Exception as e:
+                print(f"⚠️  迁移日志目录失败: {e}")
     
     def setup_logging(self):
         """设置日志记录"""
-        log_dir = Path("logs")
-        log_dir.mkdir(exist_ok=True)
+        log_dir = self.podlens_dir / "logs"
+        log_file = log_dir / "background.log"
         
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s',
-            handlers=[
-                logging.FileHandler(log_dir / 'podlens.log', encoding='utf-8'),
-                logging.StreamHandler()
-            ]
+        # 配置日志格式
+        log_formatter = logging.Formatter(
+            '%(asctime)s - %(levelname)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
         )
-        self.logger = logging.getLogger(__name__)
+        
+        # 文件处理器 - 写入到 .podlens/logs/background.log
+        file_handler = logging.FileHandler(log_file, encoding='utf-8')
+        file_handler.setLevel(logging.INFO)
+        file_handler.setFormatter(log_formatter)
+        
+        # 控制台处理器
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.INFO)
+        console_handler.setFormatter(log_formatter)
+        
+        # 配置主日志器
+        self.logger = logging.getLogger('podlens_background')
+        self.logger.setLevel(logging.INFO)
+        
+        # 清除现有处理器并添加新的
+        self.logger.handlers.clear()
+        self.logger.addHandler(file_handler)
+        self.logger.addHandler(console_handler)
+        
+        # 防止重复日志
+        self.logger.propagate = False
+        
+        print(f"📄 日志配置完成: {log_file.absolute()}")
     
     def load_global_status(self):
         """加载全局状态信息"""
@@ -195,14 +326,24 @@ class BackgroundService:
                     self.status = json.load(f)
             else:
                 self.status = {
+                    "service_started": datetime.now().isoformat(),
                     "last_run": None,
                     "total_runs": 0,
                     "total_success": 0,
-                    "total_errors": 0
+                    "total_errors": 0,
+                    "version": "1.0.0"
                 }
+                self.save_global_status()
         except Exception as e:
             self.logger.error(f"加载状态失败: {e}")
-            self.status = {"last_run": None, "total_runs": 0, "total_success": 0, "total_errors": 0}
+            self.status = {
+                "service_started": datetime.now().isoformat(),
+                "last_run": None, 
+                "total_runs": 0, 
+                "total_success": 0, 
+                "total_errors": 0,
+                "version": "1.0.0"
+            }
     
     def save_global_status(self):
         """保存全局状态信息"""
