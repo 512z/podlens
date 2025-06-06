@@ -78,13 +78,9 @@ class ApplePodcastExplorer:
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
         })
         
-        # 创建媒体文件夹
-        self.media_dir = Path("media")
-        self.media_dir.mkdir(exist_ok=True)
-        
-        # 创建outputs文件夹用于保存转录文件
-        self.transcript_dir = Path("outputs")
-        self.transcript_dir.mkdir(exist_ok=True)
+        # 创建根输出文件夹
+        self.root_output_dir = Path("outputs")
+        self.root_output_dir.mkdir(exist_ok=True)
         
         # 初始化MLX Whisper模型 - 始终使用medium模型
         self.whisper_model_name = 'mlx-community/whisper-medium'
@@ -421,7 +417,44 @@ class ApplePodcastExplorer:
         
         return final_filename
     
-    def download_episode(self, episode: Dict, episode_num: int, channel_name: str) -> bool:
+    def create_episode_folder(self, channel_name: str, episode_title: str, episode_num: int) -> Path:
+        """
+        创建剧集文件夹
+        
+        Args:
+            channel_name: 频道名称
+            episode_title: 剧集标题
+            episode_num: 剧集编号
+        
+        Returns:
+            Path: 剧集文件夹路径
+        """
+        # 清理频道名和剧集标题
+        safe_channel = self.sanitize_filename(channel_name)
+        safe_title = self.sanitize_filename(episode_title)
+        
+        # 限制文件夹名长度以确保路径不会过长
+        max_channel_length = 50
+        max_title_length = 100
+        
+        if len(safe_channel) > max_channel_length:
+            safe_channel = safe_channel[:max_channel_length]
+        
+        if len(safe_title) > max_title_length:
+            safe_title = safe_title[:max_title_length]
+        
+        # 创建频道文件夹
+        channel_dir = self.root_output_dir / safe_channel
+        channel_dir.mkdir(exist_ok=True)
+        
+        # 创建剧集文件夹
+        episode_folder_name = f"{episode_num:02d}_{safe_title}"
+        episode_dir = channel_dir / episode_folder_name
+        episode_dir.mkdir(exist_ok=True)
+        
+        return episode_dir
+
+    def download_episode(self, episode: Dict, episode_num: int, channel_name: str) -> tuple[bool, Path]:
         """
         下载单个剧集
         
@@ -431,23 +464,24 @@ class ApplePodcastExplorer:
             channel_name: 频道名称
         
         Returns:
-            bool: 下载是否成功
+            tuple[bool, Path]: (下载是否成功, 剧集文件夹路径)
         """
         if not episode['audio_url']:
             print(f"❌ 剧集{episode_num}没有可用音频链接")
-            return False
+            return False, None
         
         try:
-            # 构建文件名
-            safe_channel = self.sanitize_filename(channel_name)
-            safe_title = self.sanitize_filename(episode['title'])
-            filename = self.ensure_filename_length(safe_channel, episode_num, safe_title)
-            filepath = self.media_dir / filename
+            # 创建剧集文件夹
+            episode_dir = self.create_episode_folder(channel_name, episode['title'], episode_num)
+            
+            # 音频文件名
+            filename = "audio.mp3"
+            filepath = episode_dir / filename
             
             # 检查文件是否已存在
             if filepath.exists():
-                print(f"⚠️  文件已存在，跳过: {filename}")
-                return True
+                print(f"⚠️  文件已存在，跳过: {episode_dir.name}/{filename}")
+                return True, episode_dir
             
             print(f"📥 正在下载第{episode_num}集: {episode['title']}")
             
@@ -477,15 +511,15 @@ class ApplePodcastExplorer:
                         if chunk:
                             f.write(chunk)
             
-            print(f"✅ 下载完成: {filename}")
-            return True
+            print(f"✅ 下载完成: {episode_dir.name}/{filename}")
+            return True, episode_dir
             
         except Exception as e:
             print(f"❌ 下载第{episode_num}集失败: {e}")
             # 下载失败时删除可能的不完整文件
-            if filepath.exists():
+            if 'filepath' in locals() and filepath.exists():
                 filepath.unlink()
-            return False
+            return False, None
     
     def get_file_size_mb(self, filepath):
         """获取文件大小（MB）"""
@@ -690,7 +724,7 @@ class ApplePodcastExplorer:
             print(f"❌ MLX转录失败: {e}")
             return None
     
-    def transcribe_audio_smart(self, audio_file: Path, episode_title: str, channel_name: str) -> bool:
+    def transcribe_audio_smart(self, audio_file: Path, episode_title: str, channel_name: str, episode_dir: Path) -> bool:
         """
         智能音频转录：根据文件大小选择最佳转录方式
         
@@ -698,6 +732,7 @@ class ApplePodcastExplorer:
             audio_file: 音频文件路径
             episode_title: 剧集标题
             channel_name: 频道名称
+            episode_dir: 剧集文件夹路径
         
         Returns:
             bool: 转录是否成功
@@ -707,15 +742,13 @@ class ApplePodcastExplorer:
             return False
         
         try:
-            # 构建转录文件名
-            safe_channel = self.sanitize_filename(channel_name)
-            safe_title = self.sanitize_filename(episode_title)
-            transcript_filename = self.ensure_transcript_filename_length(safe_channel, safe_title)
-            transcript_filepath = self.transcript_dir / transcript_filename
+            # 转录文件路径
+            transcript_filename = "transcript.md"
+            transcript_filepath = episode_dir / transcript_filename
             
             # 检查转录文件是否已存在
             if transcript_filepath.exists():
-                print(f"⚠️  转录文件已存在，跳过: {transcript_filename}")
+                print(f"⚠️  转录文件已存在，跳过: {episode_dir.name}/{transcript_filename}")
                 return True
             
             print(f"🎙️  开始转录: {episode_title}")
@@ -811,7 +844,7 @@ class ApplePodcastExplorer:
                 f.write("---\n\n")
                 f.write(transcript_result['text'])
             
-            print(f"✅ 转录完成: {transcript_filename}")
+            print(f"✅ 转录完成: {episode_dir.name}/{transcript_filename}")
             
             # 清理文件
             try:
@@ -873,7 +906,7 @@ class ApplePodcastExplorer:
         # 下载结果统计
         success_count = 0
         total_count = len(selected_indices)
-        downloaded_files = []
+        downloaded_files = []  # (audio_file_path, episode_title, episode_dir)
         
         # 下载选中剧集
         for i, episode_index in enumerate(selected_indices, 1):
@@ -881,13 +914,12 @@ class ApplePodcastExplorer:
             episode_num = episode_index + 1  # 转回1基编号
             
             print(f"\n[{i}/{total_count}] ", end="")
-            if self.download_episode(episode, episode_num, channel_name):
+            success, episode_dir = self.download_episode(episode, episode_num, channel_name)
+            if success and episode_dir:
                 success_count += 1
                 # 构建已下载文件路径
-                safe_channel = self.sanitize_filename(channel_name)
-                safe_title = self.sanitize_filename(episode['title'])
-                filename = self.ensure_filename_length(safe_channel, episode_num, safe_title)
-                downloaded_files.append((self.media_dir / filename, episode['title']))
+                audio_file = episode_dir / "audio.mp3"
+                downloaded_files.append((audio_file, episode['title'], episode_dir))
         
         # 显示下载汇总
         print(f"\n📊 下载完成! 成功: {success_count}/{total_count}")
@@ -903,7 +935,7 @@ class ApplePodcastExplorer:
         转录已下载文件
         
         Args:
-            downloaded_files: [(文件路径, 标题), ...]
+            downloaded_files: [(文件路径, 标题, 剧集文件夹), ...]
             channel_name: 频道名称
         """
         print(f"\n🎙️  转录选项:")
@@ -923,21 +955,21 @@ class ApplePodcastExplorer:
         else:
             print("💡 使用MLX Whisper本地转录")
         
-        successful_transcripts = []  # 存储成功转录的信息
+        successful_transcripts = []  # 存储成功转录的信息 (episode_title, channel_name, episode_dir)
         
-        for i, (audio_file, episode_title) in enumerate(downloaded_files, 1):
+        for i, (audio_file, episode_title, episode_dir) in enumerate(downloaded_files, 1):
             if not audio_file.exists():
                 print(f"❌ 文件不存在: {audio_file}")
                 continue
             
             print(f"\n[{i}/{total_count}] ", end="")
-            if self.transcribe_audio_smart(audio_file, episode_title, channel_name):
+            if self.transcribe_audio_smart(audio_file, episode_title, channel_name, episode_dir):
                 success_count += 1
-                successful_transcripts.append((episode_title, channel_name))
+                successful_transcripts.append((episode_title, channel_name, episode_dir))
         
         print(f"\n📊 转录完成! 成功: {success_count}/{total_count}")
         if success_count > 0:
-            print(f"📁 转录文件保存在: {self.transcript_dir.absolute()}")
+            print(f"📁 转录文件保存在各剧集文件夹内: {self.root_output_dir.absolute()}")
             
             # 询问是否生成摘要
             if self.gemini_client and successful_transcripts:
@@ -956,17 +988,15 @@ class ApplePodcastExplorer:
                     print(f"\n🚀 开始为{len(successful_transcripts)}个文件生成摘要...")
                     summary_success_count = 0
                     
-                    for i, (episode_title, channel_name) in enumerate(successful_transcripts, 1):
+                    for i, (episode_title, channel_name, episode_dir) in enumerate(successful_transcripts, 1):
                         print(f"\n[{i}/{len(successful_transcripts)}] 处理: {episode_title}")
                         
                         # 读取转录文件
-                        safe_channel = self.sanitize_filename(channel_name)
-                        safe_title = self.sanitize_filename(episode_title)
-                        transcript_filename = self.ensure_transcript_filename_length(safe_channel, safe_title)
-                        transcript_filepath = self.transcript_dir / transcript_filename
+                        transcript_filename = "transcript.md"
+                        transcript_filepath = episode_dir / transcript_filename
                         
                         if not transcript_filepath.exists():
-                            print(f"❌ 转录文件不存在: {transcript_filename}")
+                            print(f"❌ 转录文件不存在: {episode_dir.name}/{transcript_filename}")
                             continue
                         
                         try:
@@ -1011,9 +1041,9 @@ class ApplePodcastExplorer:
                                     language_choice = 'en'  # 回退英文
                             
                             # 保存摘要
-                            summary_path = self.save_summary(final_summary, episode_title, channel_name, language_choice)
+                            summary_path = self.save_summary(final_summary, episode_title, channel_name, language_choice, episode_dir)
                             if summary_path:
-                                print(f"✅ 摘要已保存: {Path(summary_path).name}")
+                                print(f"✅ 摘要已保存: {episode_dir.name}/summary.md")
                                 summary_success_count += 1
                             else:
                                 print("❌ 摘要保存失败")
@@ -1024,7 +1054,7 @@ class ApplePodcastExplorer:
                     
                     print(f"\n📊 摘要生成完成! 成功: {summary_success_count}/{len(successful_transcripts)}")
                     if summary_success_count > 0:
-                        print(f"📁 摘要文件保存在: {self.transcript_dir.absolute()}")
+                        print(f"📁 摘要文件保存在各剧集文件夹内: {self.root_output_dir.absolute()}")
                         
                         # Ask about visualization
                         self.ask_for_visualization(successful_transcripts, language_choice)
@@ -1045,7 +1075,7 @@ class ApplePodcastExplorer:
         询问用户是否要生成可视化故事
         
         Args:
-            successful_transcripts: 成功转录的(episode_title, channel_name)元组列表
+            successful_transcripts: 成功转录的(episode_title, channel_name, episode_dir)元组列表
             language: 语言偏好 ('ch' 为中文)
         """
         if not successful_transcripts:
@@ -1075,30 +1105,30 @@ class ApplePodcastExplorer:
         # Process each successful transcript/summary
         visual_success_count = 0
         
-        for i, (episode_title, channel_name) in enumerate(successful_transcripts, 1):
+        for i, (episode_title, channel_name, episode_dir) in enumerate(successful_transcripts, 1):
             print(f"\n[{i}/{len(successful_transcripts)}] 正在生成可视化故事: {episode_title}")
             
             # Build file paths
-            safe_channel = self.sanitize_filename(channel_name)
-            safe_title = self.sanitize_filename(episode_title)
-            
             if content_choice == 't':
                 # Use transcript
-                source_filename = self.ensure_transcript_filename_length(safe_channel, safe_title)
+                source_filename = "transcript.md"
                 content_type = "转录文本"
             else:
                 # Use summary
-                source_filename = self.ensure_summary_filename_length(safe_channel, safe_title)
+                source_filename = "summary.md"
                 content_type = "摘要"
             
-            source_filepath = self.transcript_dir / source_filename
+            source_filepath = episode_dir / source_filename
             
             if not source_filepath.exists():
-                print(f"❌ {content_type}文件未找到: {source_filename}")
+                print(f"❌ {content_type}文件未找到: {episode_dir.name}/{source_filename}")
                 continue
             
+            # Set output path for visual story
+            visual_output_path = episode_dir / "visual.html"
+            
             # Generate visual story
-            if generate_visual_story(str(source_filepath)):
+            if generate_visual_story(str(source_filepath), str(visual_output_path)):
                 visual_success_count += 1
                 print(f"✅ 可视化故事生成成功!")
             else:
@@ -1106,7 +1136,7 @@ class ApplePodcastExplorer:
         
         print(f"\n📊 可视化故事生成完成! 成功: {visual_success_count}/{len(successful_transcripts)}")
         if visual_success_count > 0:
-            print(f"📁 可视化故事保存在: {self.transcript_dir.absolute()}")
+            print(f"📁 可视化故事保存在各剧集文件夹内: {self.root_output_dir.absolute()}")
 
     def generate_summary(self, transcript: str, title: str) -> str:
         """
@@ -1193,7 +1223,7 @@ class ApplePodcastExplorer:
             print(f"❌ 翻译失败: {e}")
             return None
     
-    def save_summary(self, summary: str, title: str, channel_name: str, language: str = "en") -> str:
+    def save_summary(self, summary: str, title: str, channel_name: str, language: str = "en", episode_dir: Path = None) -> str:
         """
         保存摘要到文件
         
@@ -1202,16 +1232,22 @@ class ApplePodcastExplorer:
             title: 剧集标题
             channel_name: 频道名称
             language: 语言标识
+            episode_dir: 剧集文件夹路径
         
         Returns:
             str: 保存的文件路径
         """
         try:
             # 构建摘要文件名
-            safe_channel = self.sanitize_filename(channel_name)
-            safe_title = self.sanitize_filename(title)
-            summary_filename = self.ensure_summary_filename_length(safe_channel, safe_title)
-            summary_filepath = self.transcript_dir / summary_filename
+            if episode_dir:
+                summary_filename = "summary.md"
+                summary_filepath = episode_dir / summary_filename
+            else:
+                # 兼容老版本调用
+                safe_channel = self.sanitize_filename(channel_name)
+                safe_title = self.sanitize_filename(title)
+                summary_filename = self.ensure_summary_filename_length(safe_channel, safe_title)
+                summary_filepath = self.root_output_dir / summary_filename
             
             with open(summary_filepath, 'w', encoding='utf-8') as f:
                 f.write(f"# 摘要: {title}\n\n" if language == "ch" else f"# Summary: {title}\n\n")

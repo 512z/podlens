@@ -54,18 +54,8 @@ def generate_visual_story(input_file: str, output_file: str = None) -> bool:
         
         # Generate output filename if not provided
         if output_file is None:
-            # Extract filename without extension and add _visual suffix
-            base_name = input_path.stem
-            
-            # Ensure the Visual_ prefix + base_name + .html doesn't exceed 255 chars
-            prefix = "Visual_"
-            extension = ".html"
-            max_base_length = 255 - len(prefix) - len(extension)
-            
-            if len(base_name) > max_base_length:
-                base_name = base_name[:max_base_length]
-            
-            output_file = input_path.parent / f"{prefix}{base_name}{extension}"
+            # Default to visual.html in the same directory as input file
+            output_file = input_path.parent / "visual.html"
         
         # Read content
         print(f"📖 Reading content: {input_file}")
@@ -323,8 +313,9 @@ def generate_visual_story(input_file: str, output_file: str = None) -> bool:
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write(html_content)
         
-        print(f"💾 交互式 HTML 已保存至: {output_file}")
-        print(f"🌐 在浏览器中打开 {output_file} 查看故事!")
+        # Only show success message, not the full path for cleaner output
+        print(f"💾 交互式 HTML 已保存至: {Path(output_file).name}")
+        print(f"🌐 在浏览器中打开文件查看故事!")
         
         return True
         
@@ -334,11 +325,20 @@ def generate_visual_story(input_file: str, output_file: str = None) -> bool:
 
 def main():
     """Main function for standalone execution"""
-    # Default behavior for backward compatibility
-    input_file = "outputs/Huberman_Lab_Essentials__Machines,_Creativity_&_Love___Dr._Lex_Fridman_transcript.md"
-    output_file = "outputs/Interactive_Mindmap_Simple.html"
+    import sys
     
-    generate_visual_story(input_file, output_file)
+    if len(sys.argv) > 1:
+        # Command line usage: python visual_ch.py input_file [output_file]
+        input_file = sys.argv[1]
+        output_file = sys.argv[2] if len(sys.argv) > 2 else None
+        
+        if generate_visual_story(input_file, output_file):
+            print("✅ 可视化故事生成成功!")
+        else:
+            print("❌ 可视化故事生成失败")
+    else:
+        print("用法: python visual_ch.py <input_file> [output_file]")
+        print("示例: python visual_ch.py outputs/频道名/01_剧集标题/transcript.md")
 
 if __name__ == "__main__":
     main()

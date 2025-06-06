@@ -163,16 +163,14 @@ class PodlensAutomation:
                 print(f"\n[{i+1}/{len(valid_indices)}] 处理剧集: {episode['title']}")
                 
                 # 下载剧集
-                if self.apple_explorer.download_episode(episode, episode_num, selected_channel['name']):
+                success, episode_dir = self.apple_explorer.download_episode(episode, episode_num, selected_channel['name'])
+                if success and episode_dir:
                     result["downloads_success"] += 1
                     
                     # 构建文件路径
-                    safe_channel = self.apple_explorer.sanitize_filename(selected_channel['name'])
-                    safe_title = self.apple_explorer.sanitize_filename(episode['title'])
-                    filename = self.apple_explorer.ensure_filename_length(safe_channel, episode_num, safe_title)
-                    audio_filepath = self.apple_explorer.media_dir / filename
+                    audio_filepath = episode_dir / "audio.mp3"
                     
-                    downloaded_files.append((audio_filepath, episode['title']))
+                    downloaded_files.append((audio_filepath, episode['title'], episode_dir))
                 else:
                     result["errors"].append(f"下载失败: {episode['title']}")
             
@@ -181,17 +179,14 @@ class PodlensAutomation:
             if enable_transcription and downloaded_files:
                 print(f"\n🎙️ 开始转录 {len(downloaded_files)} 个音频文件...")
                 
-                for audio_file, episode_title in downloaded_files:
+                for audio_file, episode_title, episode_dir in downloaded_files:
                     if audio_file.exists():
-                        if self.apple_explorer.transcribe_audio_smart(audio_file, episode_title, selected_channel['name']):
+                        if self.apple_explorer.transcribe_audio_smart(audio_file, episode_title, selected_channel['name'], episode_dir):
                             result["transcripts_success"] += 1
-                            successful_transcripts.append((episode_title, selected_channel['name']))
+                            successful_transcripts.append((episode_title, selected_channel['name'], episode_dir))
                             
                             # 添加转录文件到输出列表
-                            safe_channel = self.apple_explorer.sanitize_filename(selected_channel['name'])
-                            safe_title = self.apple_explorer.sanitize_filename(episode_title)
-                            transcript_filename = self.apple_explorer.ensure_transcript_filename_length(safe_channel, safe_title)
-                            transcript_path = self.apple_explorer.transcript_dir / transcript_filename
+                            transcript_path = episode_dir / "transcript.md"
                             result["output_files"].append(str(transcript_path))
                         else:
                             result["errors"].append(f"转录失败: {episode_title}")
@@ -206,14 +201,12 @@ class PodlensAutomation:
                 else:
                     summary_lang = summary_language
                 
-                for episode_title, channel_name in successful_transcripts:
+                for episode_title, channel_name, episode_dir in successful_transcripts:
                     print(f"📄 生成摘要: {episode_title}")
                     
                     # 读取转录文件
-                    safe_channel = self.apple_explorer.sanitize_filename(channel_name)
-                    safe_title = self.apple_explorer.sanitize_filename(episode_title)
-                    transcript_filename = self.apple_explorer.ensure_transcript_filename_length(safe_channel, safe_title)
-                    transcript_filepath = self.apple_explorer.transcript_dir / transcript_filename
+                    transcript_filename = "transcript.md"
+                    transcript_filepath = episode_dir / transcript_filename
                     
                     if transcript_filepath.exists():
                         try:
@@ -237,7 +230,7 @@ class PodlensAutomation:
                                     
                                     # 保存摘要
                                     summary_path = self.apple_explorer.save_summary(
-                                        final_summary, episode_title, channel_name, summary_lang
+                                        final_summary, episode_title, channel_name, summary_lang, episode_dir
                                     )
                                     if summary_path:
                                         result["summaries_success"] += 1
@@ -263,30 +256,22 @@ class PodlensAutomation:
                     else:
                         from .visual_en import generate_visual_story
                     
-                    for episode_title, channel_name in successful_transcripts:
+                    for episode_title, channel_name, episode_dir in successful_transcripts:
                         print(f"🖼️ 生成可视化: {episode_title}")
                         
                         # 确定源文件
-                        safe_channel = self.apple_explorer.sanitize_filename(channel_name)
-                        safe_title = self.apple_explorer.sanitize_filename(episode_title)
-                        
                         if visualization_source == "summary" and enable_summary:
-                            source_filename = self.apple_explorer.ensure_summary_filename_length(safe_channel, safe_title)
+                            source_filename = "summary.md"
                         else:
-                            source_filename = self.apple_explorer.ensure_transcript_filename_length(safe_channel, safe_title)
+                            source_filename = "transcript.md"
                         
-                        source_filepath = self.apple_explorer.transcript_dir / source_filename
+                        source_filepath = episode_dir / source_filename
+                        visual_output_path = episode_dir / "visual.html"
                         
                         if source_filepath.exists():
-                            if generate_visual_story(str(source_filepath)):
+                            if generate_visual_story(str(source_filepath), str(visual_output_path)):
                                 result["visualizations_success"] += 1
-                                
-                                # 构建可视化文件路径
-                                visual_filename = f"Visual_{safe_title}.html"
-                                if len(visual_filename) > 255:
-                                    visual_filename = f"Visual_{safe_title[:240]}.html"
-                                visual_path = self.apple_explorer.transcript_dir / visual_filename
-                                result["output_files"].append(str(visual_path))
+                                result["output_files"].append(str(visual_output_path))
                             else:
                                 result["errors"].append(f"可视化生成失败: {episode_title}")
                         else:
