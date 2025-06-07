@@ -17,16 +17,14 @@ A fast & cost-free & AI-powered tool that:
 
 ## ✨ Key Features
 
-- 🎯 **Smart Transcription**: Multiple transcription methods (Groq API ultra-fast transcription, MLX Whisper local transcription)
-- 🍎 **Apple Podcast**: Search podcast channels, download episodes, automatic transcription
-- 🎥 **YouTube Support**: Extract transcripts, audio download fallback for transcription
-- 🤖 **AI Summary**: Generate intelligent summaries using Gemini AI
-- 🎨 **Interactive Visualization**: Transform content into beautiful, interactive HTML stories with data visualizations
-- 🌍 **Bilingual**: Supports both Chinese and English output
-- 🗂️ **Episode-based Organization**: Each episode gets its own dedicated folder with all related files
-- 🤖 **Automation API**: Programmatic access for batch processing and integration with other workflows
-- 📁 **Smart File Management**: Automatically organize output files with clear hierarchical structure
-- 🔄 **Language Switching**: Choose your preferred interface language
+- 🤖 **24x7 Intelligent Automation**: Set-and-forget service monitors your favorite podcasts and YouTube channels, automatically processing new episodes hourly - **'autopodlens'**
+- 🎯 **Interactive Manual Mode**: On-demand processing with intuitive command-line interface for immediate transcription and analysis of specific episodes - **'podlens'** 
+- ⚡ **Ultra-Fast Smart Transcription**: Multiple AI-powered methods (Groq API for speed, MLX Whisper for large files) with intelligent fallback chain
+- 🍎 **Apple Podcast & YouTube Integration**: Seamless content extraction from both major platforms with smart episode detection
+- 🧠 **AI-Powered Analysis**: Generate intelligent summaries and insights using Google Gemini AI with structured topic analysis
+- 🎨 **Interactive Visual Stories**: Transform content into beautiful, responsive HTML visualizations with data charts and modern UI
+- 🌍 **Bilingual Support**: Full Chinese/English interface with smart language detection and switching
+- 🗂️ **Smart Organization**: Episode-based folder structure with automatic file management and duplicate detection
 
 
 ## 📦 Installation
