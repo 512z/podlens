@@ -18,6 +18,7 @@ A fast & cost-free & AI-powered tool that:
 ## ✨ Key Features
 
 - 🤖 **24x7 Intelligent Automation**: Set-and-forget service monitors your favorite podcasts and YouTube channels, automatically processing new episodes hourly - **autopodlens**
+- 📧 **Smart Email Digest**: Daily automated email summaries with AI-generated insights and processed content overview
 - 🎯 **Interactive Manual Mode**: On-demand processing with intuitive command-line interface for immediate transcription and analysis of specific episodes - **podlens** 
 - ⚡ **Ultra-Fast Smart Transcription**: Multiple AI-powered methods (Groq API for speed, MLX Whisper for large files) with intelligent fallback chain
 - 🍎 **Apple Podcast & YouTube Integration**: Seamless content extraction from both major platforms with smart episode detection
@@ -81,6 +82,23 @@ autopodlens --status  # English version
 autopod --status      # Chinese version
 ```
 
+### Email Service (NEW!)
+```bash
+# Email notification setup
+autopod(or autopodlens) --email your@email.com --time 08:00,18:00
+
+# Check email service status  
+autopod(or autopodlens) --email-status
+
+# Sync email configuration
+autopod(or autopodlens) --email-sync
+
+# Disable email service
+autopod(or autopodlens) --email-disable
+```
+
+**You can also change the email service settings in the `.podlens/setting` file, then use '--email-sync' to sync the settings.**
+
 ### Configuration Files (Auto-Generated)
 
 - `my_pod.md` - Configure monitored podcasts (created automatically)
@@ -89,6 +107,25 @@ autopod --status      # Chinese version
 - `.podlens/status.json` - Service status and processed episodes tracking (created automatically)
 
 When you first run the automation service, PodLens will automatically create configuration files:
+
+**`.podlens/setting`** - Automation frequency and monitoring settings (created automatically)
+
+```markdown
+# PodLens Automation Settings
+# Run frequency (hours), supports decimals, e.g. 0.5 means every 30 minutes
+run_frequency = 1.0
+
+# Monitor Apple Podcast (my_pod.md)
+monitor_podcast = true
+
+# Monitor YouTube (my_tube.md)
+monitor_youtube = true
+
+# Email notification settings
+email_function = true
+user_email = example@gmail.com
+notification_times = 08:00,18:00
+```
 
 **`my_pod.md`** (auto-generated with examples):
 ```markdown
@@ -256,6 +293,15 @@ your-project/
 - **Channel Format**: YouTube channels use simple names (e.g., `Bloomberg_Live` for `@Bloomberg_Live`)
 - **Episode Organization**: Date-based folder structure with detailed file naming for easy navigation
 - **Status Tracking**: View service status and processing history with `--status` flag
+
+### Smart Email Digest Service
+- **Daily Summaries**: Automated email reports with AI-generated insights
+- **Flexible Scheduling**: Multiple daily notification times (e.g., 08:00, 18:00)  
+- **Rich HTML Format**: Beautiful email layout with channel groupings and key insights
+- **Intelligent Content**: AI-powered daily digest highlighting important information
+- **Easy Management**: Simple commands for setup, status check, and configuration
+
+![PodLens Email Example](demo/email_en.png)
 
 ### Smart Transcription Logic
 - **Small files (<25MB)**: Groq API ultra-fast transcription

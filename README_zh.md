@@ -19,6 +19,7 @@
 
 - 🤖 **24x7智能自动化**: 一键设置即可忘记，自动监控您喜爱的播客和YouTube频道，每小时自动处理新发布的节目 - **autopod**
 - 🎯 **交互式手动模式**: 按需处理功能，通过直观的命令行界面即时转录和分析特定节目 - **pod**
+- 📧 **智能邮件摘要**: 每日自动邮件报告，包含AI生成的洞察和处理内容概览
 - ⚡ **超高速智能转录**: 多种AI驱动方法（Groq API高速处理，MLX Whisper处理大文件）配备智能回退机制
 - 🍎 **Apple Podcast & YouTube集成**: 无缝支持两大主流平台，智能检测新节目
 - 🧠 **AI驱动的深度分析**: 使用Google Gemini AI生成智能摘要和洞察，结构化主题分析
@@ -82,6 +83,25 @@ autopodlens --status  # 英文版
 autopod --status      # 中文版
 ```
 
+### 邮件服务（NEW！）
+
+```bash
+# 邮件通知设置
+autopod --email your@email.com --time 08:00,18:00
+
+# 检查邮件服务状态  
+autopod --email-status
+
+# 同步邮件配置
+autopod --email-sync
+
+# 禁用邮件服务
+autopod --email-disable
+```
+
+**您也可以在`.podlens/setting`文件中更改邮件服务设置，然后使用'--email-sync'同步设置。**
+
+
 ### 配置文件（自动生成）
 - `my_pod.md` - 配置监控的播客（自动创建）
 - `my_tube.md` - 配置监控的YouTube频道（自动创建）
@@ -89,6 +109,24 @@ autopod --status      # 中文版
 - `.podlens/status.json` - 服务状态和已处理剧集跟踪（自动创建）
 
 首次运行自动化服务时，PodLens将自动创建配置文件：
+
+**`.podlens/setting`**（自动创建）：
+```markdown
+# PodLens 自动化设置
+# 运行频率（小时），支持小数，如0.5表示30分钟
+run_frequency = 1.0
+
+# 是否监控Apple Podcast (my_pod.md)
+monitor_podcast = true
+
+# 是否监控YouTube (my_tube.md)
+monitor_youtube = true
+
+# 邮件通知设置
+email_function = true
+user_email = example@gmail.com
+notification_times = 08:00,18:00
+```
 
 **`my_pod.md`**（自动生成示例）：
 ```markdown
@@ -261,6 +299,15 @@ your-project/
 - **频道格式**: YouTube频道使用简单名称（如`Bloomberg_Live`对应`@Bloomberg_Live`）
 - **剧集组织**: 基于日期的文件夹结构，详细文件命名便于导航
 - **状态跟踪**: 使用`--status`标志查看服务状态和处理历史
+
+### 智能邮件摘要服务
+- **每日摘要**: 自动邮件报告，包含AI生成的洞察和处理内容概览
+- **灵活调度**: 多个每日通知时间（例如：08:00, 18:00）  
+- **丰富HTML格式**: 美观的邮件布局，包含频道分组和关键洞察
+- **智能内容**: AI驱动的每日摘要，突出重要信息
+- **轻松管理**: 简单的设置、状态检查和配置命令
+
+![PodLens Email Example](demo/email_ch.png)
 
 ### 智能转录逻辑
 

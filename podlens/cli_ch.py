@@ -76,8 +76,8 @@ def main():
     """主函数"""
     # 检查是否通过autopod命令调用
     if 'autopod' in sys.argv[0]:
-        from .auto_ch import start_automation
-        start_automation()
+        from .auto_ch import main as auto_main
+        auto_main()
         return
     
     # 添加命令行参数支持--auto和--status

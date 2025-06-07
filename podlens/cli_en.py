@@ -76,8 +76,8 @@ def main():
     """Main function"""
     # Check if called through autopodlens command
     if 'autopodlens' in sys.argv[0]:
-        from .auto_en import start_automation
-        start_automation()
+        from .auto_en import main as auto_main
+        auto_main()
         return
     
     # Add command line argument support for --auto and --status

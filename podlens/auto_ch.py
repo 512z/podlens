@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import List, Dict
 import json
 import sys
+import argparse
 from dotenv import load_dotenv
 
 # Enhanced .env loading function
@@ -28,6 +29,8 @@ load_env_robust()
 
 # Import the automation-optimized core modules
 from .core_ch import ApplePodcastExplorer, Podnet
+# Import email service
+from .email_service_ch import email_service, cron_manager
 
 
 
@@ -101,7 +104,11 @@ class ConfigManager:
                 f.write("# 是否监控Apple Podcast (my_pod.md)\n")
                 f.write(f"monitor_podcast = {str(settings['monitor_podcast']).lower()}\n\n")
                 f.write("# 是否监控YouTube (my_tube.md)\n")
-                f.write(f"monitor_youtube = {str(settings['monitor_youtube']).lower()}\n")
+                f.write(f"monitor_youtube = {str(settings['monitor_youtube']).lower()}\n\n")
+                f.write("# 邮件通知设置\n")
+                f.write("email_function = false\n")
+                f.write("user_email = #user@example.com\n")
+                f.write("notification_times = #08:00,18:00\n")
         except Exception as e:
             print(f"⚠️  保存设置文件失败: {e}")
     
@@ -461,10 +468,143 @@ def show_automation_status():
     show_status()
 
 
+def setup_email_service(user_email: str, notification_times: List[str]) -> bool:
+    """设置邮件服务"""
+    print(f"📧 配置邮件服务...")
+    print(f"   邮箱: {user_email}")
+    print(f"   通知时间: {', '.join(notification_times)}")
+    
+    # 保存配置
+    success = email_service.save_email_settings(
+        email_function=True,
+        user_email=user_email,
+        notification_times=notification_times
+    )
+    
+    if not success:
+        print("❌ 邮件配置保存失败")
+        return False
+    
+    # 设置cron任务
+    success = cron_manager.setup_email_cron(notification_times)
+    if not success:
+        print("❌ Cron任务配置失败")
+        return False
+    
+    print("✅ 邮件服务配置成功！")
+    print("📱 您将在指定时间收到每日播客摘要")
+    return True
+
+
+
+def show_email_status():
+    """显示邮件服务状态"""
+    settings = email_service.load_email_settings()
+    cron_tasks = cron_manager.check_email_cron_status()
+    
+    print("📧 邮件服务状态:")
+    print(f"   功能状态: {'启用' if settings['email_function'] else '禁用'}")
+    print(f"   邮箱地址: {settings['user_email'] if settings['user_email'] else '未配置'}")
+    print(f"   通知时间: {', '.join(settings['notification_times']) if settings['notification_times'] else '未设置'}")
+    print(f"   Cron任务: {len(cron_tasks)} 个")
+    
+    if cron_tasks:
+        print("   定时任务详情:")
+        for task in cron_tasks:
+            print(f"     - {task}")
+
+
+
+def sync_email_config():
+    """自动读取配置文件并同步cron任务"""
+    print("🔄 正在同步邮件配置...")
+    
+    # 读取当前配置
+    settings = email_service.load_email_settings()
+    
+    if not settings['email_function']:
+        print("ℹ️  邮件功能未启用，无需同步")
+        return True
+    
+    if not settings['user_email']:
+        print("❌ 配置文件中未找到邮箱地址")
+        return False
+    
+    if not settings['notification_times']:
+        print("❌ 配置文件中未找到通知时间")
+        return False
+    
+    print(f"📧 读取到配置：")
+    print(f"   邮箱: {settings['user_email']}")
+    print(f"   通知时间: {', '.join(settings['notification_times'])}")
+    
+    # 同步cron任务
+    success = cron_manager.setup_email_cron(settings['notification_times'])
+    
+    if success:
+        print("✅ cron任务同步成功！")
+        print("📱 邮件服务已按配置文件更新")
+        return True
+    else:
+        print("❌ cron任务同步失败")
+        return False
+
+def disable_email_service():
+    """禁用邮件服务"""
+    print("🛑 禁用邮件服务...")
+    
+    # 移除cron任务
+    success = cron_manager.remove_email_cron()
+    if success:
+        print("✅ 已移除邮件定时任务")
+    else:
+        print("⚠️  移除定时任务失败")
+    
+    # 更新配置
+    email_service.save_email_settings(email_function=False)
+    print("✅ 邮件服务已禁用")
+
 def main():
     """主函数用于命令行接口"""
-    if len(sys.argv) > 1 and sys.argv[1] == '--status':
+    parser = argparse.ArgumentParser(description='PodLens 自动化服务')
+    parser.add_argument('--status', action='store_true', help='显示自动化状态')
+    parser.add_argument('--email', metavar='EMAIL', help='配置邮件服务，指定接收邮箱')
+    parser.add_argument('--time', metavar='TIME', help='邮件通知时间，格式如: 08:00,18:00')
+    parser.add_argument('--email-sync', action='store_true', help='同步邮件配置到cron任务')
+    parser.add_argument('--email-status', action='store_true', help='显示邮件服务状态')
+    parser.add_argument('--email-disable', action='store_true', help='禁用邮件服务')
+    
+    args = parser.parse_args()
+    
+    if args.status:
         show_status()
+    elif args.email:
+        # 邮件配置
+        user_email = args.email
+        notification_times = []
+        
+        if args.time:
+            # 解析时间参数
+            time_parts = args.time.split(',')
+            for time_part in time_parts:
+                time_part = time_part.strip()
+                if ':' in time_part:
+                    notification_times.append(time_part)
+                else:
+                    print(f"⚠️  时间格式错误: {time_part}，应为 HH:MM 格式")
+        
+        if not notification_times:
+            # 默认时间
+            notification_times = ['08:00', '18:00']
+            print("ℹ️  未指定通知时间，使用默认时间: 08:00, 18:00")
+        
+        setup_email_service(user_email, notification_times)
+    elif args.email_sync:
+        sync_email_config()
+    elif args.email_status:
+        show_email_status()
+    elif args.email_disable:
+        disable_email_service()
     else:
         start_automation()
 

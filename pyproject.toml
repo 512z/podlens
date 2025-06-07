@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "podlens"
-version = "1.1.8"
+version = "1.2.0"
 description = "Intelligent Podcast & Youtube Transcription & Understanding AI Agent"
 readme = "README.md"
 license = {text = "MIT"}
@@ -41,6 +41,7 @@ dependencies = [
     "openai-whisper",
     "youtube-transcript-api",
     "yt-dlp",
+    "schedule",
 ]
 
 [project.scripts]

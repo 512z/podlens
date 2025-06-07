@@ -5,23 +5,33 @@ Intelligent automated podcast and YouTube processing
 """
 
 import os
-import sys
-import json
 import time
 import schedule
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict
 import json
 import sys
+import argparse
+from dotenv import load_dotenv
 
-# Add current path to sys.path for relative imports
-current_path = Path(__file__).parent
-if str(current_path) not in sys.path:
-    sys.path.insert(0, str(current_path))
+# Enhanced .env loading function
+def load_env_robust():
+    """Load .env file from multiple possible locations"""
+    if load_dotenv():
+        return True
+    home_env = Path.home() / '.env'
+    if home_env.exists() and load_dotenv(home_env):
+        return True
+    return False
 
+load_env_robust()
+
+# Import the automation-optimized core modules
 from .core_en import ApplePodcastExplorer, Podnet
+# Import email service
+from .email_service_en import email_service, cron_manager
 
 class ConfigManager:
     """Configuration and status manager"""
@@ -91,7 +101,11 @@ class ConfigManager:
                 f.write("# Whether to monitor Apple Podcast (my_pod.md)\n")
                 f.write(f"monitor_podcast = {str(settings['monitor_podcast']).lower()}\n\n")
                 f.write("# Whether to monitor YouTube (my_tube.md)\n")
-                f.write(f"monitor_youtube = {str(settings['monitor_youtube']).lower()}\n")
+                f.write(f"monitor_youtube = {str(settings['monitor_youtube']).lower()}\n\n")
+                f.write("# Email notification settings\n")
+                f.write("email_function = false\n")
+                f.write("user_email = #user@example.com\n")
+                f.write("notification_times = #08:00,18:00\n")
         except Exception as e:
             print(f"⚠️  Failed to save settings file: {e}")
     
@@ -446,10 +460,144 @@ def show_status():
     engine.show_status()
 
 
+def show_automation_status():
+    """Show automation service status (backward compatibility)"""
+    show_status()
+
+
+def setup_email_service(user_email: str, notification_times: List[str]) -> bool:
+    """Setup email service"""
+    print(f"📧 Configuring email service...")
+    print(f"   Email: {user_email}")
+    print(f"   Notification times: {', '.join(notification_times)}")
+    
+    # Save configuration
+    success = email_service.save_email_settings(
+        email_function=True,
+        user_email=user_email,
+        notification_times=notification_times
+    )
+    
+    if not success:
+        print("❌ Failed to save email configuration")
+        return False
+    
+    # Setup cron tasks
+    success = cron_manager.setup_email_cron(notification_times)
+    if not success:
+        print("❌ Failed to configure cron tasks")
+        return False
+    
+    print("✅ Email service configured successfully!")
+    print("📱 You will receive daily podcast summaries at specified times")
+    return True
+
+def show_email_status():
+    """Show email service status"""
+    settings = email_service.load_email_settings()
+    cron_tasks = cron_manager.check_email_cron_status()
+    
+    print("📧 Email Service Status:")
+    print(f"   Status: {'Enabled' if settings['email_function'] else 'Disabled'}")
+    print(f"   Email address: {settings['user_email'] if settings['user_email'] else 'Not configured'}")
+    print(f"   Notification times: {', '.join(settings['notification_times']) if settings['notification_times'] else 'Not set'}")
+    print(f"   Cron tasks: {len(cron_tasks)} tasks")
+    
+    if cron_tasks:
+        print("   Task details:")
+        for task in cron_tasks:
+            print(f"     - {task}")
+
+def sync_email_config():
+    """Automatically read configuration file and sync cron tasks"""
+    print("🔄 Syncing email configuration...")
+    
+    # Read current configuration
+    settings = email_service.load_email_settings()
+    
+    if not settings['email_function']:
+        print("ℹ️  Email function not enabled, no sync needed")
+        return True
+    
+    if not settings['user_email']:
+        print("❌ Email address not found in configuration file")
+        return False
+    
+    if not settings['notification_times']:
+        print("❌ Notification times not found in configuration file")
+        return False
+    
+    print(f"📧 Configuration found:")
+    print(f"   Email: {settings['user_email']}")
+    print(f"   Notification times: {', '.join(settings['notification_times'])}")
+    
+    # Sync cron tasks
+    success = cron_manager.setup_email_cron(settings['notification_times'])
+    
+    if success:
+        print("✅ Cron tasks synced successfully!")
+        print("📱 Email service updated according to configuration file")
+        return True
+    else:
+        print("❌ Failed to sync cron tasks")
+        return False
+
+def disable_email_service():
+    """Disable email service"""
+    print("🛑 Disabling email service...")
+    
+    # Remove cron tasks
+    success = cron_manager.remove_email_cron()
+    if success:
+        print("✅ Email scheduled tasks removed")
+    else:
+        print("⚠️  Failed to remove scheduled tasks")
+    
+    # Update configuration
+    email_service.save_email_settings(email_function=False)
+    print("✅ Email service disabled")
+
 def main():
     """Main function for command line interface"""
-    if len(sys.argv) > 1 and sys.argv[1] == '--status':
+    parser = argparse.ArgumentParser(description='PodLens Automation Service')
+    parser.add_argument('--status', action='store_true', help='Show automation status')
+    parser.add_argument('--email', metavar='EMAIL', help='Configure email service, specify recipient email')
+    parser.add_argument('--time', metavar='TIME', help='Email notification times, format: 08:00,18:00')
+    parser.add_argument('--email-sync', action='store_true', help='Sync email configuration to cron tasks')
+    parser.add_argument('--email-status', action='store_true', help='Show email service status')
+    parser.add_argument('--email-disable', action='store_true', help='Disable email service')
+    
+    args = parser.parse_args()
+    
+    if args.status:
         show_status()
+    elif args.email:
+        # Email configuration
+        user_email = args.email
+        notification_times = []
+        
+        if args.time:
+            # Parse time parameters
+            time_parts = args.time.split(',')
+            for time_part in time_parts:
+                time_part = time_part.strip()
+                if ':' in time_part:
+                    notification_times.append(time_part)
+                else:
+                    print(f"⚠️  Invalid time format: {time_part}, should be HH:MM format")
+        
+        if not notification_times:
+            # Default times
+            notification_times = ['08:00', '18:00']
+            print("ℹ️  No notification times specified, using defaults: 08:00, 18:00")
+        
+        setup_email_service(user_email, notification_times)
+    elif args.email_sync:
+        sync_email_config()
+    elif args.email_status:
+        show_email_status()
+    elif args.email_disable:
+        disable_email_service()
     else:
         start_automation()
 
