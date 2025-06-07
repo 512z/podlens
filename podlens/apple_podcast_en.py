@@ -767,7 +767,7 @@ class ApplePodcastExplorer:
             }
             
         except Exception as e:
-            print(f"❌ Groq transcription failed: {e}")
+            # print(f"❌ Groq transcription failed: {e}")
             return None
     
     def transcribe_with_mlx(self, audio_file: Path, quiet: bool = False) -> dict:

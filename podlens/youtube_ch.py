@@ -659,7 +659,7 @@ class TranscriptExtractor:
             }
             
         except Exception as e:
-            print(f"❌ Groq转录失败: {e}")
+            # print(f"❌ Groq转录失败: {e}")
             return None
     
     def transcribe_with_mlx(self, audio_file: Path) -> dict:
