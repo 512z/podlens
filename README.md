@@ -17,8 +17,8 @@ A fast & cost-free & AI-powered tool that:
 
 ## ✨ Key Features
 
-- 🤖 **24x7 Intelligent Automation**: Set-and-forget service monitors your favorite podcasts and YouTube channels, automatically processing new episodes hourly - **'autopodlens'**
-- 🎯 **Interactive Manual Mode**: On-demand processing with intuitive command-line interface for immediate transcription and analysis of specific episodes - **'podlens'** 
+- 🤖 **24x7 Intelligent Automation**: Set-and-forget service monitors your favorite podcasts and YouTube channels, automatically processing new episodes hourly - **autopodlens**
+- 🎯 **Interactive Manual Mode**: On-demand processing with intuitive command-line interface for immediate transcription and analysis of specific episodes - **podlens** 
 - ⚡ **Ultra-Fast Smart Transcription**: Multiple AI-powered methods (Groq API for speed, MLX Whisper for large files) with intelligent fallback chain
 - 🍎 **Apple Podcast & YouTube Integration**: Seamless content extraction from both major platforms with smart episode detection
 - 🧠 **AI-Powered Analysis**: Generate intelligent summaries and insights using Google Gemini AI with structured topic analysis
