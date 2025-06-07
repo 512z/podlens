@@ -301,7 +301,7 @@ your-project/
 - **Intelligent Content**: AI-powered daily digest highlighting important information
 - **Easy Management**: Simple commands for setup, status check, and configuration
 
-![PodLens Email Example](demo/email_en.png)
+![PodLens Email Example](demo/email_en.jpg)
 
 ### Smart Transcription Logic
 - **Small files (<25MB)**: Groq API ultra-fast transcription
