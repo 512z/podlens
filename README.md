@@ -2,7 +2,7 @@
 
 🧠 For knowledge-seekers who want to learn from audio content more effectively.
 
-🤖 Now with 24x7 automation service!
+🤖 Now with 24x7 automation service & 📧 smart email digest!
 
 A fast & cost-free & AI-powered tool that:
 - 🎙️ transcribes audio content from Apple Podcast and YouTube platforms
