@@ -1,0 +1,109 @@
+#podlens的输出
+(base) henryzha@Henrys-MacBook-Pro-6 podlens % podlens
+  ██████╗  ██████╗ ██████╗ ██╗     ███████╗███╗   ██╗███████╗
+  ██╔══██╗██╔═══██╗██╔══██╗██║     ██╔════╝████╗  ██║██╔════╝
+  ██████╔╝██║   ██║██║  ██║██║     █████╗  ██╔██╗ ██║███████╗
+  ██╔═══╝ ██║   ██║██║  ██║██║     ██╔══╝  ██║╚██╗██║╚════██║
+  ██║     ╚██████╔╝██████╔╝███████╗███████╗██║ ╚████║███████║
+  ╚═╝      ╚═════╝ ╚═════╝ ╚══════╝╚══════╝╚═╝  ╚═══╝╚══════╝
+
+🎧🎥 Media Transcription & Summary Tool
+
+==================================================
+Supports Apple Podcast and YouTube platforms
+==================================================
+
+🎯 MLX Whisper available, using device: Device(gpu, 0)
+🚀 Groq API available, ultra-fast transcription enabled
+🤖 Gemini API available, AI summary enabled
+
+📡 Please select information source:
+1. Apple Podcast
+2. YouTube
+0. Exit
+
+Please enter your choice (1/2/0): 1
+
+🎧 You selected Apple Podcast
+========================================
+
+Please enter the podcast channel name you want to search (or press Enter to return to main menu): thoughts on the market
+Searching for podcast channel: thoughts on the market
+
+Found 2 matching podcast channels:
+============================================================
+1. Thoughts on the Market
+   Author: Morgan Stanley
+   Genre: Investing, Podcasts, Business
+   Description: No description
+------------------------------------------------------------
+2. Trader's Thoughts on the Market
+   Author: Wall Street Phantom
+   Genre: Investing, Podcasts, Business
+   Description: No description
+------------------------------------------------------------
+
+Please select a channel (1-2), or press Enter to exit: 1
+Please select the number of episodes to preview (default 10): 3
+Getting podcast episodes...
+
+📻 Thoughts on the Market - Most recent 3 podcast episodes:
+================================================================================
+ 1. Standing by Our Outlook
+    📅 Publish Date: 2025-06-06
+    ⏱️  Duration: 00:09:44
+    📝 Description: <p>Morgan Stanley’s midyear outlook defied the conventional view in a number of ways. Our analysts Serena Tang and Vishy Tirupattur push back on the pushback to their conclusions, explaining the thoug...
+    🎵 Audio URL: https://pdst.fm/e/pscrb.fm/rss/p/rss.art19.com/episodes/45c75bad-5165-4dbc-9716-38b82a734bde.mp3?rss_browser=BAhJIg9mZWVkcGFyc2VyBjoGRVQ%3D--6249cc52a45c5995843f2b1fcedbd2955c2d7057
+--------------------------------------------------------------------------------
+ 2. 5 Reasons the Obesity Drug Market Remains Strong
+    📅 Publish Date: 2025-06-05
+    ⏱️  Duration: 00:03:38
+    📝 Description: <p>The global market for obesity drugs is expanding. Our U.S. Pharma and Biotech Analyst Terrence Flynn discusses what’s driving the next stage of global growth for GLP-1 medicines.</p><p><br /></p><p...
+    🎵 Audio URL: https://pdst.fm/e/pscrb.fm/rss/p/rss.art19.com/episodes/053da383-cebc-4fb3-a6ec-f30531989317.mp3?rss_browser=BAhJIg9mZWVkcGFyc2VyBjoGRVQ%3D--6249cc52a45c5995843f2b1fcedbd2955c2d7057
+--------------------------------------------------------------------------------
+ 3. Midyear U.S. Credit Outlook: Why Investors Should Be Selective
+    📅 Publish Date: 2025-06-04
+    ⏱️  Duration: 00:07:11
+    📝 Description: <p>Our analysts Andrew Sheets and Vishwas Patkar take stock of the U.S. credit market, noting which segments are on firm footing going into a period of slower growth.</p><p><br /></p><p>Read more&nbsp...
+    🎵 Audio URL: https://pdst.fm/e/pscrb.fm/rss/p/rss.art19.com/episodes/16dd9066-3472-4571-8595-b96d499653d7.mp3?rss_browser=BAhJIg9mZWVkcGFyc2VyBjoGRVQ%3D--6249cc52a45c5995843f2b1fcedbd2955c2d7057
+--------------------------------------------------------------------------------
+
+💾 Download options:
+Format instructions:
+  - Download single episode: enter a number, e.g. '3'
+  - Download multiple episodes: separate with commas, e.g. '1,3,5'
+  - Download range: use hyphen, e.g. '1-10'
+  - Combine: e.g. '1,3-5,8'
+
+Please select episodes to download (1-3) or press Enter to skip: 2
+📥 Downloading: 5 Reasons the Obesity Drug Market Remains Strong
+Episode 2: 100%|██████████████████████████████████████████████████████████████████████████████████| 3.58M/3.58M [00:00<00:00, 26.5MB/s]
+✅ Download complete
+
+⚡️ Ultra-fast transcription...
+✅ Transcription complete
+
+🧠 Summarizing...
+✅ Summaries completed
+
+🎨 Visual Story Generation?(y/n): 
+
+---
+
+#autopodlens的输出
+(base) henryzha@Henrys-MacBook-Pro-6 podlens % autopodlens
+🤖 Starting PodLens 24x7 Intelligent Automation Service
+
+⏰ Running frequency: hourly
+🎧 Monitoring podcasts: 1
+📺 Monitoring YouTube channels: 1
+Press Ctrl+Z to stop service
+
+⏰ Starting hourly check
+🔍 Checking podcast: thoughts on the market
+📥 Processing new episode: Standing by Our Outlook...
+✅ thoughts on the market processing complete
+🔍 Checking YouTube channel: @Bloomberg_Live
+📥 Processing new video: Jennifer Doudna on Future of Gene Editing \u0026 I...
+✅ @Bloomberg_Live processing complete
+✅ Check complete - Podcasts: 1/1, YouTube: 1/1

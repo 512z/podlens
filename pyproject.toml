@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "podlens"
-version = "1.1.6"
+version = "1.1.8"
 description = "Intelligent Podcast & Youtube Transcription & Understanding AI Agent"
 readme = "README.md"
 license = {text = "MIT"}
@@ -44,10 +44,18 @@ dependencies = [
 ]
 
 [project.scripts]
+# 主要命令 / Main commands
+podlens = "podlens.cli_en:main"
+pod = "podlens.cli_ch:main"
+
+# 自动化命令 / Automation commands (integrated into CLI)
+autopodlens = "podlens.cli_en:main"
+autopod = "podlens.cli_ch:main"
+
+# 向后兼容命令 / Backward compatibility commands
 podlens-zh = "podlens.cli_ch:main"
 podlens-en = "podlens.cli_en:main"
 podlens-ch = "podlens.cli_ch:main"
-podlens = "podlens.cli_en:main"
 
 [project.urls]
 Homepage = "https://github.com/512z/podlens/tree/main"

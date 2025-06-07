@@ -3,7 +3,7 @@ YouTube related features
 """
 
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 import os
 from pathlib import Path
@@ -95,6 +95,42 @@ class YouTubeSearcher:
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
         })
     
+    def _fix_encoding(self, text: str) -> str:
+        """
+        Smart encoding fix - precise Unicode escape sequence handling
+        
+        Args:
+            text: Original text
+            
+        Returns:
+            str: Fixed text
+        """
+        if not text:
+            return text
+            
+        try:
+            # Only process Unicode escape sequences like \u0026 -> &
+            if '\\u' in text:
+                import re
+                # Use regex to precisely replace Unicode escape sequences
+                def unicode_replacer(match):
+                    try:
+                        return match.group(0).encode().decode('unicode_escape')
+                    except:
+                        return match.group(0)
+                
+                # Only match and replace \uXXXX format Unicode escape sequences
+                result = re.sub(r'\\u[0-9a-fA-F]{4}', unicode_replacer, text)
+                return result
+            
+            # Otherwise return original string directly
+            # Most of the time YouTube returns correct UTF-8 encoding
+            return text
+            
+        except Exception:
+            # If processing fails, return original text
+            return text
+    
     def get_video_title(self, video_id: str) -> str:
         """Get video title from video ID"""
         try:
@@ -107,14 +143,75 @@ class YouTubeSearcher:
             title_match = re.search(r'"title":"([^"]+)"', response.text)
             if title_match:
                 title = title_match.group(1)
-                # Decode unicode escapes
-                title = title.encode().decode('unicode_escape')
+                # Use intelligent encoding fix
+                title = self._fix_encoding(title)
                 return title
             else:
                 return "YouTube Video"
         except Exception as e:
             print(f"Could not get video title: {e}")
             return "YouTube Video"
+
+    def get_video_info(self, video_id: str) -> Dict:
+        """
+        Get video information: title, channel name, published date
+        
+        Args:
+            video_id: YouTube video ID
+            
+        Returns:
+            Dict: Dictionary containing title, channel name, published date
+        """
+        try:
+            video_url = f"https://www.youtube.com/watch?v={video_id}"
+            response = self.session.get(video_url, timeout=10)
+            response.raise_for_status()
+            
+            import re
+            
+            # Extract title
+            title = "Unknown Title"
+            title_match = re.search(r'"title":"([^"]+)"', response.text)
+            if title_match:
+                title = title_match.group(1)
+                title = self._fix_encoding(title)
+            
+            # Extract channel name
+            channel_name = "Unknown Channel"
+            # Try multiple patterns to extract channel name
+            channel_patterns = [
+                r'"channelName":"([^"]+)"',
+                r'"author":"([^"]+)"',
+                r'"ownerChannelName":"([^"]+)"',
+                r'<link itemprop="name" content="([^"]+)">'
+            ]
+            
+            for pattern in channel_patterns:
+                channel_match = re.search(pattern, response.text)
+                if channel_match:
+                    channel_name = channel_match.group(1).strip()
+                    # Smart encoding fix
+                    channel_name = self._fix_encoding(channel_name)
+                    break
+            
+            # Extract published date - usually relative time from page
+            published_date = "Recent"
+            
+            return {
+                'title': title,
+                'channel_name': channel_name,
+                'published_date': published_date,
+                'video_id': video_id
+            }
+            
+        except Exception as e:
+            print(f"Failed to get video info: {e}")
+            return {
+                'title': "Unknown Title", 
+                'channel_name': "Unknown Channel",
+                'published_date': "Recent",
+                'video_id': video_id
+            }
     
     def search_youtube_podcast(self, podcast_name: str, num_episodes: int = 5) -> List[Dict]:
         """Search for podcast episodes on YouTube using channel videos page"""
@@ -246,10 +343,6 @@ class TranscriptExtractor:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
         
-        # Create media folder for audio download fallback
-        self.media_dir = Path("media")
-        self.media_dir.mkdir(exist_ok=True)
-        
         # Initialize session for downloads
         self.session = requests.Session()
         self.session.headers.update({
@@ -281,6 +374,92 @@ class TranscriptExtractor:
         if len(filename) > 200:
             filename = filename[:200]
         return filename
+
+    def parse_youtube_relative_time(self, time_str: str) -> str:
+        """
+        Parse YouTube relative time to specific date
+        
+        Args:
+            time_str: YouTube time string like "14 hours ago", "2 days ago"
+            
+        Returns:
+            str: Date in YYYY-MM-DD format
+        """
+        if not time_str or time_str in ['Recent', 'Unknown']:
+            return datetime.now().strftime('%Y-%m-%d')
+        
+        # Normalize input
+        time_str = time_str.lower().strip()
+        
+        # Match various time formats
+        patterns = [
+            (r'(\d+)\s*(second|minute|hour)s?\s*ago', 'hours'),
+            (r'(\d+)\s*hours?\s*ago', 'hours'),
+            (r'(\d+)\s*days?\s*ago', 'days'),
+            (r'(\d+)\s*weeks?\s*ago', 'weeks'),
+            (r'(\d+)\s*months?\s*ago', 'months'),
+            (r'(\d+)\s*years?\s*ago', 'years'),
+        ]
+        
+        now = datetime.now()
+        
+        for pattern, unit in patterns:
+            match = re.search(pattern, time_str)
+            if match:
+                amount = int(match.group(1))
+                
+                if unit == 'hours':
+                    target_date = now - timedelta(hours=amount)
+                elif unit == 'days':
+                    target_date = now - timedelta(days=amount)
+                elif unit == 'weeks':
+                    target_date = now - timedelta(weeks=amount)
+                elif unit == 'months':
+                    target_date = now - timedelta(days=amount * 30)  # approximate
+                elif unit == 'years':
+                    target_date = now - timedelta(days=amount * 365)  # approximate
+                else:
+                    target_date = now
+                
+                return target_date.strftime('%Y-%m-%d')
+        
+        # If unable to parse, return today's date
+        return now.strftime('%Y-%m-%d')
+
+    def create_episode_folder(self, channel_name: str, episode_title: str, published_date_str: str) -> Path:
+        """
+        Create YouTube episode folder (Apple Podcast style)
+        
+        Args:
+            channel_name: Channel name
+            episode_title: Episode title
+            published_date_str: Published time string (like "14 hours ago")
+            
+        Returns:
+            Path: Episode folder path
+        """
+        # Clean filenames
+        safe_channel = self.sanitize_filename(channel_name)
+        safe_title = self.sanitize_filename(episode_title)
+        
+        # Limit folder name lengths
+        if len(safe_channel) > 50:
+            safe_channel = safe_channel[:50]
+        if len(safe_title) > 100:
+            safe_title = safe_title[:100]
+        
+        # Parse date
+        date_folder = self.parse_youtube_relative_time(published_date_str)
+        
+        # Create directory structure: outputs/channel_name/date/episode_name/
+        channel_dir = self.output_dir / safe_channel
+        date_dir = channel_dir / date_folder
+        episode_dir = date_dir / safe_title
+        
+        # Create directories
+        episode_dir.mkdir(parents=True, exist_ok=True)
+        
+        return episode_dir
     
     def ensure_filename_length(self, prefix: str, safe_title: str, extension: str = ".mp3") -> str:
         """
@@ -317,28 +496,28 @@ class TranscriptExtractor:
         size_bytes = os.path.getsize(filepath)
         return size_bytes / (1024 * 1024)
     
-    def download_youtube_audio(self, video_url: str, title: str) -> Optional[Path]:
+    def download_youtube_audio(self, video_url: str, title: str, episode_dir: Path = None) -> Optional[Path]:
         """Download YouTube video audio using yt-dlp"""
         if not YT_DLP_AVAILABLE:
             print("❌ yt-dlp not available, cannot download audio")
             return None
         
         try:
+            # Use episode directory if provided, otherwise use output directory
+            download_dir = episode_dir if episode_dir else self.output_dir
+            
             # Clean filename
             safe_title = self.sanitize_filename(title)
             audio_filename = self.ensure_filename_length("youtube_", safe_title)
-            audio_filepath = self.media_dir / audio_filename
+            audio_filepath = download_dir / audio_filename
             
             # Check if file already exists
             if audio_filepath.exists():
-                print(f"⚠️  Audio file already exists: {audio_filename}")
                 return audio_filepath
-            
-            print(f"📥 Downloading YouTube audio: {title}")
             
             ydl_opts = {
                 'format': 'bestaudio/best',
-                'outtmpl': str(self.media_dir / f"youtube_{safe_title}.%(ext)s"),
+                'outtmpl': str(download_dir / f"youtube_{safe_title}.%(ext)s"),
                 'extractaudio': True,
                 'audioformat': 'mp3',
                 'audioquality': '192',
@@ -352,8 +531,6 @@ class TranscriptExtractor:
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([video_url])
-            
-            print(f"✅ Audio download complete: {audio_filename}")
             return audio_filepath
             
         except Exception as e:
@@ -364,10 +541,7 @@ class TranscriptExtractor:
         """Smart two-level audio compression below Groq API limit (copied from Apple section)
         Prefer 64k for quality, fallback to 48k if still >25MB"""
         try:
-            print(f"🔧 Compressing audio file: {input_file.name}")
-            
-            # First level compression: 64k (prioritize quality)
-            print("📊 First level compression: 16KHz mono, 64kbps MP3")
+            print("🔧 Compressing...")
             
             # Generate safe temporary filename that doesn't exceed 255 chars
             original_name = output_file.stem  # filename without extension
@@ -405,18 +579,13 @@ class TranscriptExtractor:
             
             # Check 64k compressed file size
             compressed_size_mb = self.get_file_size_mb(temp_64k_file)
-            print(f"📊 64k compressed size: {compressed_size_mb:.1f}MB")
             
             if compressed_size_mb <= 25:
                 # 64k compression meets requirement, use 64k result
                 temp_64k_file.rename(output_file)
-                print(f"✅ 64k compression complete: {output_file.name} ({compressed_size_mb:.1f}MB)")
                 return True
             else:
                 # 64k compression still >25MB, perform second level 48k compression
-                print(f"⚠️  64k compression still >25MB, performing second level 48k compression...")
-                print("📊 Second level compression: 16KHz mono, 48kbps MP3")
-                
                 cmd_48k = [
                     'ffmpeg',
                     '-i', str(input_file),
@@ -434,9 +603,6 @@ class TranscriptExtractor:
                     text=True,
                     check=True
                 )
-                
-                final_size_mb = self.get_file_size_mb(output_file)
-                print(f"✅ 48k compression complete: {output_file.name} ({final_size_mb:.1f}MB)")
                 
                 # Clean up temporary file
                 if temp_64k_file.exists():
@@ -460,9 +626,6 @@ class TranscriptExtractor:
     def transcribe_with_groq(self, audio_file: Path) -> dict:
         """Transcribe audio file using Groq API (copied from Apple section)"""
         try:
-            print(f"🚀 Groq API transcription: {audio_file.name}")
-            print("🧠 Using model: whisper-large-v3")
-            
             start_time = time.time()
             
             with open(audio_file, "rb") as file:
@@ -482,8 +645,6 @@ class TranscriptExtractor:
             file_size_mb = self.get_file_size_mb(audio_file)
             speed_ratio = file_size_mb / processing_time * 60 if processing_time > 0 else 0
             
-            print(f"✅ Groq transcription complete! Time: {processing_time:.1f}s")
-            
             return {
                 'text': text,
                 'language': language,
@@ -499,8 +660,7 @@ class TranscriptExtractor:
     def transcribe_with_mlx(self, audio_file: Path) -> dict:
         """Transcribe audio file using MLX Whisper (copied from Apple section)"""
         try:
-            print(f"🎯 MLX Whisper transcription: {audio_file.name}")
-            print("🧠 Using model: mlx-community/whisper-medium")
+            print("💻 Local transcription...")
             
             start_time = time.time()
             
@@ -515,8 +675,6 @@ class TranscriptExtractor:
             file_size_mb = self.get_file_size_mb(audio_file)
             speed_ratio = file_size_mb / processing_time * 60 if processing_time > 0 else 0
             
-            print(f"✅ MLX transcription complete! Time: {processing_time:.1f}s")
-            
             return {
                 'text': result['text'],
                 'language': result.get('language', 'en'),
@@ -529,6 +687,128 @@ class TranscriptExtractor:
             print(f"❌ MLX transcription failed: {e}")
             return None
     
+    def detect_chinese_content(self, text):
+        """
+        Detect the proportion of Chinese characters in text
+        
+        Args:
+            text: Text to analyze
+            
+        Returns:
+            float: Chinese character ratio (0.0 - 1.0)
+        """
+        if not text:
+            return 0.0
+        
+        # Try to fix encoding issues
+        try:
+            # If garbled text, try to fix
+            if '\\' in text or 'è' in text or 'ä' in text:
+                try:
+                    # Try different encoding fixes
+                    fixed_text = text.encode('latin1').decode('utf-8')
+                    text = fixed_text
+                except:
+                    pass
+        except:
+            pass
+        
+        # Chinese character ranges (including Chinese punctuation)
+        import re
+        chinese_pattern = r'[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u3000-\u303f\uff00-\uffef]'
+        chinese_chars = len(re.findall(chinese_pattern, text))
+        total_chars = len(text.replace(' ', ''))  # Don't count spaces
+        
+        if total_chars == 0:
+            return 0.0
+        
+        return chinese_chars / total_chars
+
+    def smart_language_selection(self, available_transcripts, video_title="", channel_name="", threshold=0.3):
+        """
+        Smart transcript language selection
+        
+        Args:
+            available_transcripts: List of available transcripts
+            video_title: Video title
+            channel_name: Channel name
+            threshold: Chinese character ratio threshold
+            
+        Returns:
+            (selected transcript object, language code, is_generated, reason)
+        """
+        # Analyze content language
+        combined_text = f"{video_title} {channel_name}"
+        chinese_ratio = self.detect_chinese_content(combined_text)
+        
+        # Analyze available subtitle languages
+        available_languages = set()
+        chinese_available = False
+        english_available = False
+        
+        for trans in available_transcripts:
+            lang = trans['language_code']
+            available_languages.add(lang)
+            if lang in ['zh', 'zh-CN', 'zh-TW', 'zh-Hans', 'zh-Hant']:
+                chinese_available = True
+            elif lang == 'en':
+                english_available = True
+        
+        # Smart decision logic (running in background, no output)
+        if chinese_ratio >= threshold:
+            # Detected Chinese content
+            if chinese_available:
+                target_languages = ['zh', 'zh-CN', 'zh-TW', 'zh-Hans', 'zh-Hant']
+                reason = f"Detected Chinese content ({chinese_ratio:.1%}), selecting Chinese subtitles"
+            else:
+                target_languages = ['en']
+                reason = f"Detected Chinese content ({chinese_ratio:.1%}), but no Chinese subtitles available, selecting English"
+        else:
+            # No Chinese content detected
+            if chinese_available and not english_available:
+                target_languages = ['zh', 'zh-CN', 'zh-TW', 'zh-Hans', 'zh-Hant']
+                reason = f"Although content appears non-Chinese ({chinese_ratio:.1%}), only Chinese subtitles available"
+            else:
+                target_languages = ['en']
+                reason = f"Detected non-Chinese content ({chinese_ratio:.1%}), prioritizing English subtitles"
+        
+        # Priority: target language manual > target language auto > English manual > English auto > other manual > other auto
+        priorities = []
+        
+        # Add target language priorities
+        for lang in target_languages:
+            priorities.append((lang, False))  # Manual subtitles
+            priorities.append((lang, True))   # Auto-generated subtitles
+        
+        # If target is not English, add English as fallback
+        if 'en' not in target_languages:
+            priorities.append(('en', False))  # English manual
+            priorities.append(('en', True))   # English auto
+        
+        # Add other language fallbacks
+        priorities.append((None, False))  # Any manual subtitles
+        priorities.append((None, True))   # Any auto-generated subtitles
+        
+        # Select by priority
+        for target_lang, target_generated in priorities:
+            for trans_info in available_transcripts:
+                lang_code = trans_info['language_code']
+                is_generated = trans_info['is_generated']
+                
+                if target_lang is None:  # Match any language
+                    if is_generated == target_generated:
+                        return trans_info['transcript'], lang_code, is_generated, f"Fallback: {lang_code}"
+                elif lang_code == target_lang and is_generated == target_generated:
+                    status = "auto" if is_generated else "manual"
+                    return trans_info['transcript'], lang_code, is_generated, f"Best match: {lang_code}({status})"
+        
+        # If nothing found, return first
+        if available_transcripts:
+            first = available_transcripts[0]
+            return first['transcript'], first['language_code'], first['is_generated'], "Default first"
+        
+        return None, None, None, "No subtitles found"
+
     def transcribe_audio_smart(self, audio_file: Path, title: str) -> Optional[str]:
         """Smart audio transcription: choose best method based on file size (copied and simplified from Apple section)"""
         if not (GROQ_AVAILABLE or MLX_WHISPER_AVAILABLE):
@@ -536,32 +816,24 @@ class TranscriptExtractor:
             return None
         
         try:
-            print(f"🎙️  Starting transcription: {title}")
-            
             # Check file size
             file_size_mb = self.get_file_size_mb(audio_file)
-            print(f"📊 Audio file size: {file_size_mb:.1f}MB")
             
             groq_limit = 25  # MB
             transcript_result = None
             compressed_file = None
-            original_size = file_size_mb
-            final_size = file_size_mb
             
             # Smart transcription strategy
             if file_size_mb <= groq_limit and GROQ_AVAILABLE:
                 # Case 1: File < 25MB, use Groq directly with MLX fallback
-                print("✅ File size within Groq limit, using ultra-fast transcription")
                 transcript_result = self.transcribe_with_groq(audio_file)
                 
                 # Fallback to MLX if Groq fails
                 if not transcript_result and MLX_WHISPER_AVAILABLE:
-                    print("🔄 Groq failed, falling back to MLX Whisper...")
                     transcript_result = self.transcribe_with_mlx(audio_file)
             
             elif file_size_mb > groq_limit:
                 # Case 2: File > 25MB, need compression
-                print("⚠️  File exceeds Groq limit, starting compression...")
                 
                 # Generate safe compressed filename
                 original_name = audio_file.stem
@@ -579,21 +851,16 @@ class TranscriptExtractor:
                 
                 if self.compress_audio_file(audio_file, compressed_file):
                     compressed_size = self.get_file_size_mb(compressed_file)
-                    final_size = compressed_size
-                    print(f"📊 Compressed size: {compressed_size:.1f}MB")
                     
                     if compressed_size <= groq_limit and GROQ_AVAILABLE:
                         # Case 2a: After compression, within Groq limit with MLX fallback
-                        print("✅ After compression within Groq limit, using ultra-fast transcription")
                         transcript_result = self.transcribe_with_groq(compressed_file)
                         
                         # Fallback to MLX if Groq fails
                         if not transcript_result and MLX_WHISPER_AVAILABLE:
-                            print("🔄 Groq failed, falling back to MLX Whisper...")
                             transcript_result = self.transcribe_with_mlx(compressed_file)
                     else:
                         # Case 2b: Still over limit, use MLX
-                        print("⚠️  Still over limit after compression, using MLX transcription")
                         if MLX_WHISPER_AVAILABLE:
                             transcript_result = self.transcribe_with_mlx(compressed_file)
                         else:
@@ -601,7 +868,6 @@ class TranscriptExtractor:
                             return None
                 else:
                     # Compression failed, try MLX
-                    print("❌ Compression failed, trying local MLX transcription")
                     if MLX_WHISPER_AVAILABLE:
                         transcript_result = self.transcribe_with_mlx(audio_file)
                     else:
@@ -610,7 +876,6 @@ class TranscriptExtractor:
             
             else:
                 # Case 3: Groq not available, use MLX
-                print("⚠️  Groq API not available, using local MLX transcription")
                 if MLX_WHISPER_AVAILABLE:
                     transcript_result = self.transcribe_with_mlx(audio_file)
                 else:
@@ -622,19 +887,17 @@ class TranscriptExtractor:
                 print("❌ All transcription methods failed")
                 return None
             
-            # Clean up files
+            # Clean up files silently
             try:
                 # Delete original audio file
                 audio_file.unlink()
-                print(f"🗑️  Deleted audio file: {audio_file.name}")
                 
                 # Delete compressed file (if exists)
                 if compressed_file and compressed_file.exists():
                     compressed_file.unlink()
-                    print(f"🗑️  Deleted compressed file: {compressed_file.name}")
                     
             except Exception as e:
-                print(f"⚠️  Failed to delete file: {e}")
+                pass  # Silently ignore cleanup errors
             
             return transcript_result['text']
             
@@ -642,31 +905,26 @@ class TranscriptExtractor:
             print(f"❌ Transcription process failed: {e}")
             return None
     
-    def extract_youtube_transcript(self, video_id: str, video_url: str = None, title: str = "Unknown") -> Optional[str]:
+    def extract_youtube_transcript(self, video_id: str, video_url: str = None, title: str = "Unknown", episode_dir: Path = None) -> Optional[str]:
         """Extract transcript from YouTube video, with audio download fallback"""
         if not YOUTUBE_TRANSCRIPT_AVAILABLE:
-            print("YouTube transcript API not available, trying audio download fallback...")
             if video_url and YT_DLP_AVAILABLE:
-                return self.audio_download_fallback(video_url, title)
+                return self.audio_download_fallback(video_url, title, episode_dir)
             return None
         
         try:
             # Clean the video ID - remove any extra characters
             clean_video_id = video_id.strip()
             if len(clean_video_id) != 11:
-                print(f"Invalid video ID length: {len(clean_video_id)} (expected 11)")
                 if video_url and YT_DLP_AVAILABLE:
-                    return self.audio_download_fallback(video_url, title)
+                    return self.audio_download_fallback(video_url, title, episode_dir)
                 return None
             
-            print(f"🎯 Prefer YouTube transcript API: {clean_video_id}")
-            
-            # Try multiple times in case of network issues
-            max_retries = 3
+            # Enhanced retry mechanism with smart language selection
+            max_retries = 20
             for attempt in range(max_retries):
                 try:
                     if attempt > 0:
-                        print(f"  Retry attempt {attempt + 1}/{max_retries}...")
                         import time
                         time.sleep(2)  # Wait 2 seconds between retries
                     
@@ -684,73 +942,33 @@ class TranscriptExtractor:
                         })
                     
                     if not available_transcripts:
-                        print(f"  No available transcripts found in attempt {attempt + 1}")
                         continue
                     
-                    print(f"  Found {len(available_transcripts)} transcript languages:")
-                    for i, trans_info in enumerate(available_transcripts, 1):
-                        status = "auto-generated" if trans_info['is_generated'] else "manual captions"
-                        translatable = "translatable" if trans_info['is_translatable'] else "not translatable"
-                        print(f"    {i}. {trans_info['language_code']} - {trans_info['language_name']} ({status}, {translatable})")
+                    # Smart language selection - automatically choose best transcript
+                    selected_transcript, selected_lang, is_generated, reason = self.smart_language_selection(
+                        available_transcripts, title, ""
+                    )
                     
-                    # If only one transcript available, use it directly
-                    if len(available_transcripts) == 1:
-                        selected_transcript = available_transcripts[0]['transcript']
-                        print(f"  Only one transcript available, auto-selecting: {available_transcripts[0]['language_code']}")
-                    else:
-                        # Multiple transcripts available, let user choose
-                        print(f"\n  Multiple transcript languages detected, please choose:")
-                        for i, trans_info in enumerate(available_transcripts, 1):
-                            status = "auto-generated" if trans_info['is_generated'] else "manual captions"
-                            print(f"    {i}. {trans_info['language_code']} - {trans_info['language_name']} ({status})")
-                        
-                        while True:
-                            try:
-                                choice = input(f"  Please select transcript language (1-{len(available_transcripts)}), or press Enter to use first: ").strip()
-                                
-                                if not choice:
-                                    # Default to first option
-                                    selected_index = 0
-                                    print(f"  Using default selection: {available_transcripts[0]['language_code']}")
-                                    break
-                                else:
-                                    selected_index = int(choice) - 1
-                                    if 0 <= selected_index < len(available_transcripts):
-                                        print(f"  Selected: {available_transcripts[selected_index]['language_code']} - {available_transcripts[selected_index]['language_name']}")
-                                        break
-                                    else:
-                                        print(f"  Please enter a number between 1 and {len(available_transcripts)}")
-                                        continue
-                            except ValueError:
-                                print(f"  Please enter a valid number (1-{len(available_transcripts)})")
-                                continue
-                        
-                        selected_transcript = available_transcripts[selected_index]['transcript']
+                    if not selected_transcript:
+                        continue
                     
                     # Fetch the selected transcript
                     try:
-                        print(f"  Fetching transcript: {selected_transcript.language_code}")
                         transcript_data = selected_transcript.fetch()
                         
                         if not transcript_data:
-                            print(f"    No data returned for {selected_transcript.language_code}")
                             # If selected transcript fails, try others
-                            print("  Trying other available transcripts...")
                             for trans_info in available_transcripts:
                                 if trans_info['transcript'] == selected_transcript:
                                     continue
                                 try:
-                                    print(f"  Fallback transcript: {trans_info['language_code']}")
                                     transcript_data = trans_info['transcript'].fetch()
                                     if transcript_data:
-                                        print(f"  Fallback transcript success: {trans_info['language_code']}")
                                         break
                                 except Exception as e:
-                                    print(f"    Fallback transcript {trans_info['language_code']} failed: {e}")
                                     continue
                         
                         if not transcript_data:
-                            print(f"  Attempt {attempt + 1}: All transcripts failed")
                             continue
                         
                         # Extract text - handle different possible formats
@@ -765,74 +983,42 @@ class TranscriptExtractor:
                             elif hasattr(entry, '__dict__') and 'text' in entry.__dict__:
                                 # Object with text attribute
                                 text_parts.append(entry.__dict__['text'])
-                            else:
-                                print(f"    Warning: Unknown segment format: {type(entry)}")
                         
                         if text_parts:
                             full_text = " ".join(text_parts).strip()
                             if full_text:
-                                print(f"✅ YouTube transcript API success! ({len(full_text)} characters)")
                                 return full_text
-                            else:
-                                print(f"    Empty text after joining")
-                        else:
-                            print(f"    No text parts extracted")
                         
                     except Exception as e3:
-                        error_msg = str(e3)
-                        print(f"    Failed to fetch selected transcript: {error_msg}")
-                        
-                        # Check for specific error types
-                        if "no element found" in error_msg.lower():
-                            print(f"    This appears to be an XML parsing error, possibly temporary")
-                        elif "not available" in error_msg.lower():
-                            print(f"    This transcript is not available")
-                        else:
-                            print(f"    Unexpected error type: {type(e3)}")
-                    
-                    # If we get here, selected transcript failed
-                    print(f"  Attempt {attempt + 1} failed")
+                        pass
                     
                 except Exception as e2:
                     error_msg = str(e2)
-                    print(f"  Failed to list transcripts (attempt {attempt + 1}): {error_msg}")
                     
                     # Check for specific error types
                     if "no element found" in error_msg.lower():
-                        print(f"    XML parsing error - this might be temporary, retrying...")
                         continue
                     elif "not available" in error_msg.lower() or "disabled" in error_msg.lower():
-                        print(f"    Video transcripts are disabled or unavailable")
                         break  # No point retrying
                     else:
-                        print(f"    Unexpected error: {type(e2)}")
-                        if attempt == max_retries - 1:  # Last attempt
-                            import traceback
-                            print(f"    Full traceback:")
-                            traceback.print_exc()
                         continue
             
-            print("❌ YouTube transcript API failed, trying audio download fallback...")
             # Fallback to audio download if transcript extraction failed
             if video_url and YT_DLP_AVAILABLE:
-                return self.audio_download_fallback(video_url, title)
+                return self.audio_download_fallback(video_url, title, episode_dir)
             else:
-                print("❌ Audio download fallback not available")
                 return None
             
         except Exception as e:
-            print(f"Error extracting YouTube transcript: {e}")
-            print("🔄 Trying audio download fallback...")
             if video_url and YT_DLP_AVAILABLE:
-                return self.audio_download_fallback(video_url, title)
+                return self.audio_download_fallback(video_url, title, episode_dir)
             return None
-    
-    def audio_download_fallback(self, video_url: str, title: str) -> Optional[str]:
+
+    def audio_download_fallback(self, video_url: str, title: str, episode_dir: Path = None) -> Optional[str]:
         """Audio download and transcription fallback solution"""
-        print("🎵 Starting audio download fallback solution...")
         
-        # Download audio
-        audio_file = self.download_youtube_audio(video_url, title)
+        # Download audio to episode directory
+        audio_file = self.download_youtube_audio(video_url, title, episode_dir)
         if not audio_file:
             return None
         
@@ -840,15 +1026,43 @@ class TranscriptExtractor:
         transcript_text = self.transcribe_audio_smart(audio_file, title)
         return transcript_text
     
-    def save_transcript(self, transcript: str, title: str) -> str:
-        """Save transcript to file"""
-        # Build path
-        safe_title = self.sanitize_filename(title)
-        transcript_path = self.output_dir / self.ensure_transcript_filename_length(safe_title)
+    def save_transcript(self, transcript: str, title: str, channel_name: str = None, published_date: str = None, episode_dir: Path = None) -> str:
+        """
+        Save transcript to file (supports new directory structure)
+        
+        Args:
+            transcript: Transcript content
+            title: Video title
+            channel_name: Channel name (for new directory structure)
+            published_date: Published date (for new directory structure)
+            episode_dir: Episode directory (if already created)
+            
+        Returns:
+            str: Saved file path
+        """
+        if episode_dir:
+            # Use new directory structure: episode_dir is already complete path
+            safe_channel = self.sanitize_filename(channel_name) if channel_name else ""
+            safe_title = self.sanitize_filename(title)
+            
+            # Generate filename
+            if safe_channel:
+                content_part = f"{safe_channel}_{safe_title}"
+            else:
+                content_part = safe_title
+            
+            transcript_filename = self.ensure_output_filename_length("Transcript_", content_part, ".md")
+            transcript_path = episode_dir / transcript_filename
+        else:
+            # Compatible with old version calls
+            safe_title = self.sanitize_filename(title)
+            transcript_path = self.output_dir / self.ensure_transcript_filename_length(safe_title)
         
         with open(transcript_path, 'w', encoding='utf-8') as f:
             f.write(f"# Transcript: {title}\n\n")
-            f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            if channel_name:
+                f.write(f"**Channel:** {channel_name}\n\n")
+            f.write(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
             f.write("---\n\n")
             f.write(transcript)
         
@@ -899,13 +1113,9 @@ class SummaryGenerator:
             try:
                 genai.configure(api_key=self.api_key)
                 self.gemini_client = genai
-                print("✅ Gemini API initialized successfully for YouTube!")
             except Exception as e:
-                print(f"⚠️  Error initializing Gemini client: {e}")
                 self.gemini_client = None
         else:
-            if not self.api_key:
-                print("Please add your Gemini API key to the .env file")
             self.gemini_client = None
     
     def generate_summary(self, transcript: str, title: str) -> Optional[str]:
@@ -933,7 +1143,6 @@ class SummaryGenerator:
             {transcript}
             """
             
-            print("Generating summary...")
             response = self.gemini_client.GenerativeModel("gemini-2.5-flash-preview-05-20").generate_content(prompt)
             
             # Handle the response properly
@@ -998,15 +1207,52 @@ class SummaryGenerator:
             truncated_title = safe_title[:max_content_length]
             return f"{prefix}{truncated_title}{extension}"
     
-    def save_summary(self, summary: str, title: str, output_dir: Path) -> str:
-        """Save summary to file"""
-        # Sanitize filename
-        safe_title = self.sanitize_filename(title)
-        summary_path = output_dir / self.ensure_summary_filename_length(safe_title)
+    def save_summary(self, summary: str, title: str, output_dir: Path, channel_name: str = None, episode_dir: Path = None) -> str:
+        """
+        Save summary to file (supports new directory structure)
+        
+        Args:
+            summary: Summary content
+            title: Video title
+            output_dir: Output directory (compatibility parameter)
+            channel_name: Channel name (for new directory structure)
+            episode_dir: Episode directory (if already created)
+            
+        Returns:
+            str: Saved file path
+        """
+        if episode_dir:
+            # Use new directory structure: episode_dir is already complete path
+            safe_channel = self.sanitize_filename(channel_name) if channel_name else ""
+            safe_title = self.sanitize_filename(title)
+            
+            # Generate filename
+            if safe_channel:
+                content_part = f"{safe_channel}_{safe_title}"
+            else:
+                content_part = safe_title
+            
+            # Ensure filename doesn't exceed limits
+            def ensure_length(prefix, content, extension, max_len=255):
+                fixed_len = len(prefix) + len(extension)
+                if len(content) + fixed_len <= max_len:
+                    return f"{prefix}{content}{extension}"
+                max_content = max_len - fixed_len
+                truncated = content[:max_content]
+                return f"{prefix}{truncated}{extension}"
+            
+            summary_filename = ensure_length("Summary_", content_part, ".md")
+            summary_path = episode_dir / summary_filename
+        else:
+            # Compatible with old version calls
+            safe_title = self.sanitize_filename(title)
+            summary_path = output_dir / self.ensure_summary_filename_length(safe_title)
         
         with open(summary_path, 'w', encoding='utf-8') as f:
             f.write(f"# Summary: {title}\n\n")
-            f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            if channel_name:
+                f.write(f"**Channel:** {channel_name}\n\n")
+            f.write(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
             f.write("---\n\n")
             f.write(summary)
         
@@ -1023,28 +1269,26 @@ class Podnet:
     
     def run(self):
         """Main application loop for YouTube"""
-        print("🎥 Welcome to Podnet - Your YouTube Podcast Assistant Tool!")
-        print("=" * 50)
         
         while True:
-            # First ask what type of information the user wants to provide
-            print("\nWhat type of information are you interested in?")
-            print("- name: podcast/channel name")
-            print("- link: YouTube video or channel link") 
-            print("- script: direct transcript content")
+            # 修改询问信息类型的提示
+            print("\nSelect YouTube resource type:")
+            print("- name: Channel name (@name)")
+            print("- link: Video link")
+            print("- script: Direct text content")
             print("\nExamples:")
-            print("  name: lex fridman, or lexfridman (the @username of the channel)")
-            print("  link: https://www.youtube.com/watch?v=qCbfTN-caFI (for a single video)")
-            print("  script: put text content in scripts/script.txt")
+            print("  name: lex fridman, or lexfridman (channel's @name)")
+            print("  link: https://www.youtube.com/watch?v=qCbfTN-caFI (single video link)")
+            print("  script: Place text content in scripts/script.txt")
             
-            content_type = input("\nChoose type (name/link/script) or 'quit' to exit: ").strip().lower()
+            content_type = input("\nPlease select type (name/link/script) or enter 'quit' to exit: ").strip().lower()
             
             if content_type in ['quit', 'exit', 'q']:
                 print("🔙 Back to main menu")
                 break
             
             if content_type not in ['name', 'link', 'script']:
-                print("Please choose 'name', 'link', 'script', or 'quit'.")
+                print("Please select 'name', 'link', 'script' or 'quit'.")
                 continue
             
             # Handle script input
@@ -1054,8 +1298,8 @@ class Podnet:
                 
                 if not script_file_path.exists():
                     print("❌ Script file not found!")
-                    print("Please create a file at: scripts/script.txt")
-                    print("Put your transcript content in that file and try again.")
+                    print("Please create a file at scripts/script.txt")
+                    print("Place your transcript content in that file and try again.")
                     continue
                 
                 try:
@@ -1063,7 +1307,7 @@ class Podnet:
                         transcript = f.read().strip()
                     
                     if not transcript:
-                        print("❌ The script file is empty.")
+                        print("❌ Script file is empty.")
                         print("Please add your transcript content to scripts/script.txt")
                         continue
                     
@@ -1074,7 +1318,7 @@ class Podnet:
                     continue
                 
                 if len(transcript) < 50:
-                    print("⚠️  The transcript seems very short. Are you sure this is complete?")
+                    print("⚠️  Transcript content seems short, are you sure it's complete?")
                     confirm = input("Continue anyway? (y/n): ").strip().lower()
                     if confirm not in ['y', 'yes']:
                         continue
@@ -1088,15 +1332,15 @@ class Podnet:
                     'platform': 'script'
                 }]
                 
-                print(f"✅ Script content received ({len(transcript)} characters)")
+                print(f"✅ Received script content ({len(transcript)} characters)")
                 
-                # Skip to action selection
-                want_transcripts = True  # Always save transcript for script
-                want_summaries = True   # Always generate summary for script
+                # 自动设置为获取转录文本和摘要
+                want_transcripts = True
+                want_summaries = True
             
             else:
                 # Handle name/link input (existing logic)
-                user_input = input(f"\nPlease enter the {content_type}: ").strip()
+                user_input = input(f"\nPlease enter {content_type}: ").strip()
                 
                 if not user_input:
                     print(f"Please enter a {content_type}.")
@@ -1125,7 +1369,7 @@ class Podnet:
                                 'published_date': 'Unknown',
                                 'platform': 'youtube'
                             }]
-                            print(f"🎥 Single video detected: {user_input}")
+                            print(f"🎥 Detected single video link: {user_input}")
                         else:
                             print("❌ Invalid YouTube video link format.")
                             continue
@@ -1136,12 +1380,12 @@ class Podnet:
                         channel_match = re.search(r'/@([^/]+)', user_input)
                         if channel_match:
                             channel_name = channel_match.group(1)
-                            print(f"🎥 Channel link detected: @{channel_name}")
+                            print(f"🎥 Detected channel link: @{channel_name}")
                         else:
                             print("❌ Invalid YouTube channel link format.")
                             continue
                     else:
-                        print("❌ Unsupported YouTube link format. Please use video links (youtube.com/watch?v=...) or channel videos links (youtube.com/@channel/videos)")
+                        print("❌ Unsupported YouTube link format. Please use video link (youtube.com/watch?v=...) or channel videos link (youtube.com/@channel/videos)")
                         continue
                 elif content_type == 'link':
                     print("❌ Please provide a valid YouTube link.")
@@ -1158,14 +1402,14 @@ class Podnet:
                     # Ask how many recent episodes the user wants (for name or channel link)
                     while True:
                         try:
-                            num_episodes = input("How many recent podcasts do you want to see? (default: 5): ").strip()
+                            num_episodes = input("How many recent episodes would you like to see? (default: 5): ").strip()
                             if not num_episodes:
                                 num_episodes = 5
                             else:
                                 num_episodes = int(num_episodes)
                             
                             if num_episodes <= 0:
-                                print("Please enter a positive number.")
+                                print("Please enter a positive integer.")
                                 continue
                             elif num_episodes > 20:
                                 print("Maximum 20 episodes allowed.")
@@ -1177,87 +1421,114 @@ class Podnet:
                             continue
                     
                     # Search for episodes on YouTube
-                    print(f"\n🔍 Searching YouTube for '{channel_name}'...")
+                    print(f"\n🔍 Searching YouTube for '{channel_name}' ...")
                     
                     episodes = self.searcher.search_youtube_podcast(channel_name, num_episodes)
                     
                     if not episodes:
-                        print("❌ No episodes found. Please try a different search term.")
+                        print("❌ No relevant episodes found. Please try other search terms.")
                         continue
                     
                     # Display episodes with platform information
-                    print(f"\n📋 Found {len(episodes)} recent episodes:")
+                    print(f"\n📋 Found {len(episodes)} latest episodes:")
                     for i, episode in enumerate(episodes, 1):
                         print(f"{i}. 🎥 [YouTube] '{episode['title']}' - {episode['published_date']}")
                     
-                    # Get episode selection FIRST
-                    episode_selection = input(f"\nWhich episodes are you interested in? (1-{len(episodes)}, e.g., '1,3,5' or 'all'): ").strip()
+                    # Get episode selection
+                    episode_selection = input(f"\nWhich episodes are you interested in? (1-{len(episodes)}, e.g., '1,3,5' or '1-3' or 'all'): ").strip()
                     
                     if episode_selection.lower() == 'all':
                         selected_episodes = episodes
                     else:
                         try:
-                            selected_indices = [int(x.strip()) - 1 for x in episode_selection.split(',')]
-                            selected_episodes = [episodes[i] for i in selected_indices if 0 <= i < len(episodes)]
+                            selected_indices = []
+                            # Split by comma first
+                            parts = episode_selection.split(',')
+                            for part in parts:
+                                part = part.strip()
+                                if '-' in part:
+                                    # Handle range format like "1-3"
+                                    start, end = part.split('-', 1)
+                                    start_idx = int(start.strip()) - 1
+                                    end_idx = int(end.strip()) - 1
+                                    selected_indices.extend(range(start_idx, end_idx + 1))
+                                else:
+                                    # Handle single number
+                                    selected_indices.append(int(part) - 1)
+                            
+                            # Remove duplicates and filter valid indices
+                            selected_indices = list(set(selected_indices))
+                            valid_indices = [i for i in selected_indices if 0 <= i < len(episodes)]
+                            
+                            # If no valid indices after filtering, raise error
+                            if not valid_indices:
+                                raise ValueError("No valid episode indices")
+                            
+                            selected_episodes = [episodes[i] for i in sorted(valid_indices)]
                         except (ValueError, IndexError):
-                            print("Invalid episode selection. Please try again.")
+                            print("Invalid episode selection, please try again.")
                             continue
                     
                     if not selected_episodes:
                         print("No valid episodes selected.")
                         continue
                     
-                    print(f"\n✅ Selected {len(selected_episodes)} episode(s)")
+                    print(f"\n✅ Selected {len(selected_episodes)} episodes")
                 
-                # THEN ask what to do with selected episodes (only for name/link)
-                print("\nWhat would you like to do with the selected episodes?")
-                print("1. Get transcripts of the episodes")
-                print("2. Get summaries of the episodes")
-                print("3. Get both transcripts and summaries")
-                
-                action = input("Your choice (1, 2, or 3): ").strip()
-                
-                if action not in ['1', '2', '3']:
-                    print("Please select a valid option (1, 2, or 3)")
-                    continue
-                
-                # Parse action
-                want_transcripts = action in ['1', '3']
-                want_summaries = action in ['2', '3']
+                # 自动设置为获取转录文本和摘要
+                want_transcripts = True
+                want_summaries = True
             
-            # Ask for language preference (common for all types)
-            language = input("\nWhat language would you like the output to be? (en/ch): ").strip().lower()
-            want_chinese = language == 'ch'
+            # 英文版默认使用英文输出，不进行翻译
+            want_chinese = False
             
-            # Process selected episodes
-            print(f"\n🚀 Processing {len(selected_episodes)} episode(s)...")
-            
+            # 处理每个节目
             for episode in selected_episodes:
-                print(f"\n📝 Processing {f'📜 [Script]' if episode['platform'] == 'script' else '🎥 [YouTube]'}: {episode['title']}")
+                print(f"\n🎥 Processing: {episode['title']}")
+                print()  # 空行
                 
                 transcript_content = None
+                episode_dir = None
                 
                 if episode['platform'] == 'script':
                     # Use the script content directly
                     transcript_content = transcript
-                    print("✅ Script content loaded successfully!")
+                    print("⚡️ Ultra-fast transcription...")
+                    print("✅ Transcription complete")
+                    print()  # 空行
                 else:
                     # Extract transcript from YouTube (existing logic)
                     video_id = episode.get('video_id')
                     if video_id:
+                        # Get detailed video info to create episode directory
+                        video_info = self.searcher.get_video_info(video_id)
+                        channel_name = video_info.get('channel_name', 'Unknown_Channel')
+                        
+                        # Use the published_date from search results first, fallback to video info
+                        published_date = episode.get('published_date', 'Unknown')
+                        if published_date in ['Unknown', 'Recent']:
+                            published_date = video_info.get('published_date', 'Recent')
+                        
+                        # Create episode directory using Apple Podcast style
+                        episode_dir = self.extractor.create_episode_folder(
+                            channel_name, 
+                            episode['title'], 
+                            published_date
+                        )
+                        
+                        print("⚡️ Ultra-fast transcription...")
                         transcript_content = self.extractor.extract_youtube_transcript(
                             video_id, 
                             episode.get('url'), 
-                            episode['title']
+                            episode['title'],
+                            episode_dir
                         )
                         if transcript_content:
-                            print("✅ YouTube transcript extracted successfully!")
+                            print("✅ Transcription complete")
+                            print()  # 空行
                     
                     # If no transcript available, create placeholder
                     if not transcript_content and (want_transcripts or want_summaries):
-                        print("⚠️  No YouTube transcript available for this video")
-                        print("   This video may not have auto-generated captions")
-                        # Create a placeholder transcript for YouTube videos without captions
                         transcript_content = f"""# {episode['title']}
 
 Published: {episode['published_date']}
@@ -1274,55 +1545,84 @@ You can:
 2. Check if captions are available manually on YouTube
 3. Request the creator to add captions
 """
-                        print("✅ Created episode info (no transcript available)")
+                        print("✅ Transcription complete")
+                        print()  # 空行
                 
                 if not transcript_content:
-                    print("❌ Could not extract transcript for this episode")
+                    print("❌ Unable to extract transcript for this episode")
                     continue
                 
                 # Save transcript if requested
                 if want_transcripts and transcript_content:
-                    transcript_path = self.extractor.save_transcript(transcript_content, episode['title'])
-                    print(f"💾 Transcript saved to: {transcript_path}")
+                    if episode['platform'] == 'script':
+                        # For script content, use default save method
+                        transcript_path = self.extractor.save_transcript(transcript_content, episode['title'])
+                    else:
+                        # For YouTube content, use new directory structure
+                        video_info = self.searcher.get_video_info(episode.get('video_id', ''))
+                        channel_name = video_info.get('channel_name', 'Unknown_Channel')
+                        
+                        # Use published_date from search results first
+                        published_date = episode.get('published_date', 'Unknown')
+                        if published_date in ['Unknown', 'Recent']:
+                            published_date = video_info.get('published_date', 'Recent')
+                        
+                        transcript_path = self.extractor.save_transcript(
+                            transcript_content, 
+                            episode['title'], 
+                            channel_name, 
+                            published_date, 
+                            episode_dir
+                        )
                 
                 # Generate and save summary if requested
                 if want_summaries and transcript_content:
                     # Check if transcript has actual content (not just placeholder)
                     if len(transcript_content.strip()) > 100 and "Note: No transcript available" not in transcript_content:
+                        print("🧠 Generating summary...")
                         summary = self.summarizer.generate_summary(transcript_content, episode['title'])
                         if summary:
                             # Translate summary to Chinese if requested
                             final_summary = summary
                             if want_chinese:
-                                print("🔄 Translating summary to Chinese...")
                                 translated_summary = self.summarizer.translate_to_chinese(summary)
                                 if translated_summary:
                                     final_summary = translated_summary
-                                    print("✅ Summary translated to Chinese!")
                                 else:
                                     print("⚠️  Translation failed, using original summary")
                             
-                            summary_path = self.summarizer.save_summary(
-                                final_summary, 
-                                episode['title'], 
-                                self.extractor.output_dir
-                            )
-                            print(f"📄 Summary saved to: {summary_path}")
+                            if episode['platform'] == 'script':
+                                # For script content, use default save method
+                                summary_path = self.summarizer.save_summary(
+                                    final_summary, 
+                                    episode['title'], 
+                                    self.extractor.output_dir
+                                )
+                            else:
+                                # For YouTube content, use new directory structure
+                                video_info = self.searcher.get_video_info(episode.get('video_id', ''))
+                                channel_name = video_info.get('channel_name', 'Unknown_Channel')
+                                
+                                summary_path = self.summarizer.save_summary(
+                                    final_summary, 
+                                    episode['title'], 
+                                    self.extractor.output_dir,
+                                    channel_name,
+                                    episode_dir
+                                )
+                            print("✅ Summary complete")
+                            print()  # 空行
                         else:
-                            print("❌ Could not generate summary")
+                            print("❌ Unable to generate summary")
                     else:
-                        print("⚠️  Skipping summary - no transcript content available")
-                
-                print("✅ Episode processing complete!")
-            
-            print(f"\n🎉 All done! Files saved in: {self.extractor.output_dir}")
+                        print("⚠️  Skipping summary - no valid transcript content")
             
             # Ask about visualization if any content was processed
             if selected_episodes:
                 self.ask_for_visualization(selected_episodes, want_chinese)
             
             # Ask if the user wants to continue
-            continue_choice = input("\nstay in youtube? (y/n): ").strip().lower()
+            continue_choice = input("\nContinue in YouTube mode? (y/n): ").strip().lower()
             if continue_choice not in ['y', 'yes', 'yes']:
                 print("🔙 Back to main menu")
                 break
@@ -1338,19 +1638,14 @@ You can:
         if not processed_episodes:
             return
         
-        print(f"\n🎨 Visual Story Generation:")
-        visualize_choice = input("Visualize the story? (y/n): ").strip().lower()
+        print(f"\n🎨 Visual story generation? (y/n):")
+        visualize_choice = input().strip().lower()
         
         if visualize_choice not in ['y', 'yes']:
             return
         
-        # Ask whether to use transcript or summary
-        print("📄 Content source:")
-        content_choice = input("Visualize based on transcript or summary? (t/s): ").strip().lower()
-        
-        if content_choice not in ['t', 's']:
-            print("Invalid choice. Skipping visualization.")
-            return
+        # 自动选择基于摘要生成
+        content_choice = 's'
         
         # Import visual module based on language
         try:
@@ -1366,41 +1661,76 @@ You can:
         # Process each episode
         visual_success_count = 0
         
+        print("\n🎨 Adding colors...")
+        
         for i, episode in enumerate(processed_episodes, 1):
             if episode['platform'] == 'script':
                 title = episode['title']
             else:
                 title = episode['title']
             
-            print(f"\n[{i}/{len(processed_episodes)}] Generating visual story: {title}")
-            
-            # Build file paths - using the same naming pattern as save functions
-            # Use the same sanitization logic as save_transcript and save_summary
-            safe_title = re.sub(r'[^\w\s-]', '', title).strip()
-            safe_title = re.sub(r'[-\s]+', '-', safe_title)
-            
-            if content_choice == 't':
-                # Use transcript
-                source_filename = self.extractor.ensure_transcript_filename_length(safe_title)
-                content_type = "transcript"
+            # For YouTube episodes, find the correct file in new directory structure
+            if episode['platform'] == 'youtube':
+                # Get episode directory path
+                video_info = self.searcher.get_video_info(episode.get('video_id', ''))
+                channel_name = video_info.get('channel_name', 'Unknown_Channel')
+                published_date = episode.get('published_date', 'Recent')
+                
+                # Create episode directory path (same logic as in run method)
+                episode_dir = self.extractor.create_episode_folder(
+                    channel_name, 
+                    episode['title'], 
+                    published_date
+                )
+                
+                # Use the same filename generation logic as save_transcript and save_summary
+                safe_channel = self.extractor.sanitize_filename(channel_name) if channel_name else ""
+                safe_title = self.extractor.sanitize_filename(episode['title'])
+                
+                # Generate content part (same logic as in save functions)
+                if safe_channel:
+                    content_part = f"{safe_channel}_{safe_title}"
+                else:
+                    content_part = safe_title
+                
+                if content_choice == 't':
+                    # Use transcript - generate filename same as save_transcript
+                    source_filename = self.extractor.ensure_output_filename_length("Transcript_", content_part, ".md")
+                    content_type = "transcript"
+                else:
+                    # Use summary - generate filename same as save_summary
+                    def ensure_length(prefix, content, extension, max_len=255):
+                        fixed_len = len(prefix) + len(extension)
+                        if len(content) + fixed_len <= max_len:
+                            return f"{prefix}{content}{extension}"
+                        max_content = max_len - fixed_len
+                        truncated = content[:max_content]
+                        return f"{prefix}{truncated}{extension}"
+                    
+                    source_filename = ensure_length("Summary_", content_part, ".md")
+                    content_type = "summary"
+                
+                source_filepath = episode_dir / source_filename
             else:
-                # Use summary
-                source_filename = self.extractor.ensure_summary_filename_length(safe_title)
-                content_type = "summary"
-            
-            source_filepath = self.extractor.output_dir / source_filename
+                # For other platforms, use the old logic
+                safe_title = re.sub(r'[^\w\s-]', '', title).strip()
+                safe_title = re.sub(r'[-\s]+', '-', safe_title)
+                
+                if content_choice == 't':
+                    source_filename = self.extractor.ensure_transcript_filename_length(safe_title)
+                    content_type = "transcript"
+                else:
+                    source_filename = self.extractor.ensure_summary_filename_length(safe_title)
+                    content_type = "summary"
+                
+                source_filepath = self.extractor.output_dir / source_filename
             
             if not source_filepath.exists():
-                print(f"❌ {content_type.capitalize()} file not found: {source_filename}")
                 continue
             
             # Generate visual story
             if generate_visual_story(str(source_filepath)):
                 visual_success_count += 1
-                print(f"✅ Visual story generated successfully!")
-            else:
-                print(f"❌ Failed to generate visual story")
         
-        print(f"\n📊 Visual story generation complete! Success: {visual_success_count}/{len(processed_episodes)}")
         if visual_success_count > 0:
-            print(f"📁 Visual stories saved in: {self.extractor.output_dir.absolute()}")
+            print("✅ Visualization complete")

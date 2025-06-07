@@ -54,16 +54,30 @@ def generate_visual_story(input_file: str, output_file: str = None) -> bool:
         
         # Generate output filename if not provided
         if output_file is None:
-            # Default to visual.html in the same directory as input file
-            output_file = input_path.parent / "visual.html"
+            # Generate proper Visual_xxx.html filename
+            input_stem = input_path.stem
+            # Remove common prefixes
+            if input_stem.startswith('Transcript_'):
+                base_name = input_stem[11:]  # Remove 'Transcript_'
+            elif input_stem.startswith('Summary_'):
+                base_name = input_stem[8:]   # Remove 'Summary_'
+            else:
+                base_name = input_stem
+            
+            # Ensure the Visual_ prefix + base_name + .html doesn't exceed 255 chars
+            max_base_length = 255 - len("Visual_") - len(".html")
+            if len(base_name) > max_base_length:
+                base_name = base_name[:max_base_length]
+            
+            output_file = input_path.parent / f"Visual_{base_name}.html"
         
         # Read content
-        print(f"📖 Reading content: {input_file}")
+        # print(f"📖 Reading content: {input_file}")  # 简化输出
         with open(input_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
         # Generate interactive HTML
-        print("🎨 Generating interactive HTML...")
+        # print("🎨 Generating interactive HTML...")  # 简化输出
         
         prompt = f"""使用 Tailwind CSS、Alpine.js 和 Font Awesome（均通过 CDN 引入）创建一个现代、视觉惊艳的单页 HTML 网站。
 
@@ -314,8 +328,8 @@ def generate_visual_story(input_file: str, output_file: str = None) -> bool:
             f.write(html_content)
         
         # Only show success message, not the full path for cleaner output
-        print(f"💾 交互式 HTML 已保存至: {Path(output_file).name}")
-        print(f"🌐 在浏览器中打开文件查看故事!")
+        # print(f"💾 交互式 HTML 已保存至: {Path(output_file).name}")  # 简化输出
+        # print(f"🌐 在浏览器中打开文件查看故事!")  # 简化输出
         
         return True
         

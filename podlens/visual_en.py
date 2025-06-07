@@ -68,12 +68,12 @@ def generate_visual_story(input_file: str, output_file: str = None) -> bool:
             output_file = input_path.parent / f"{prefix}{base_name}{extension}"
         
         # Read content
-        print(f"📖 Reading content: {input_file}")
+        # print(f"📖 Reading content: {input_file}")  # Simplified output
         with open(input_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
         # Generate interactive HTML
-        print("🎨 Generating interactive HTML...")
+        # print("🎨 Generating interactive HTML...")  # Simplified output
         
         prompt = f"""Create a modern, visually stunning single-page HTML website using Tailwind CSS, Alpine.js, and Font Awesome (all via CDN).
 
@@ -324,8 +324,8 @@ below are the content, tell this story beautifully:
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write(html_content)
         
-        print(f"💾 Interactive HTML saved to: {output_file}")
-        print(f"🌐 Open {output_file} in your web browser to view the story!")
+        # print(f"💾 Interactive HTML saved to: {output_file}")  # Simplified output
+        # print(f"🌐 Open {output_file} in your web browser to view the story!")  # Simplified output
         
         return True
         

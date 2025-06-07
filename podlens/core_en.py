@@ -1,71 +1,94 @@
+#!/usr/bin/env python3
 """
-Apple Podcast related features
+PodLens Core Classes - Core classes optimized for automation
 """
 
-import requests
-import feedparser
-from datetime import datetime
-from typing import List, Dict, Optional
 import os
-from pathlib import Path
+import sys
 import re
+import json
 import time
 import subprocess
-from tqdm import tqdm
+import contextlib
+import io
+import requests
+import feedparser
+import urllib.parse
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import List, Dict, Optional
 from dotenv import load_dotenv
-import google.generativeai as genai
+from tqdm import tqdm
 
 # Enhanced .env loading function
 def load_env_robust():
     """Load .env file from multiple possible locations"""
-    # Try loading from current working directory first
     if load_dotenv():
         return True
-    
-    # Try loading from home directory
     home_env = Path.home() / '.env'
     if home_env.exists() and load_dotenv(home_env):
         return True
-    
     return False
 
-# Load .env file with robust search
 load_env_robust()
 
-# Try to import MLX Whisper
+# API Keys
+GROQ_API_KEY = os.getenv('GROQ_API_KEY')
+GROQ_AVAILABLE = bool(GROQ_API_KEY)
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+GEMINI_AVAILABLE = bool(GEMINI_API_KEY)
+
+# Initialize API clients
+if GROQ_AVAILABLE:
+    try:
+        from groq import Groq
+    except ImportError:
+        GROQ_AVAILABLE = False
+
+try:
+    import google.generativeai as genai
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+    genai = None
+
+# Check MLX Whisper availability
 try:
     import mlx_whisper
     import mlx.core as mx
     MLX_WHISPER_AVAILABLE = True
-    # Check MLX device availability
     MLX_DEVICE = mx.default_device()
-    # print(f"🎯 MLX Whisper available, using device: {MLX_DEVICE}")
 except ImportError:
     MLX_WHISPER_AVAILABLE = False
-    # print("⚠️  MLX Whisper not available")
+    MLX_DEVICE = "Not Available"
 
-# Groq API ultra-fast transcription
+# YouTube transcript support
 try:
-    from groq import Groq
-    GROQ_API_KEY = os.getenv('GROQ_API_KEY')
-    GROQ_AVAILABLE = bool(GROQ_API_KEY)
-    # if GROQ_AVAILABLE:
-    #     print(f"🚀 Groq API available, ultra-fast transcription enabled")
-    # else:
-    #     print("⚠️  Groq API key not set")
+    from youtube_transcript_api import YouTubeTranscriptApi
+    from youtube_transcript_api.formatters import TextFormatter
+    YOUTUBE_TRANSCRIPT_AVAILABLE = True
 except ImportError:
-    GROQ_AVAILABLE = False
-    # print("⚠️  Groq SDK not installed")
+    YOUTUBE_TRANSCRIPT_AVAILABLE = False
 
-# Gemini API summary support
+# YouTube audio download fallback
 try:
-    GEMINI_AVAILABLE = True
+    import yt_dlp
+    YT_DLP_AVAILABLE = True
 except ImportError:
-    GEMINI_AVAILABLE = False
+    YT_DLP_AVAILABLE = False
 
-# Check transcription feature availability
+# Local Whisper for YouTube
+try:
+    import whisper
+    WHISPER_AVAILABLE = True
+except ImportError:
+    WHISPER_AVAILABLE = False
+
+# Check transcription functionality availability
 TRANSCRIPTION_AVAILABLE = MLX_WHISPER_AVAILABLE or GROQ_AVAILABLE
 
+# Import YouTube components
+from .youtube_en import YouTubeSearcher, TranscriptExtractor, SummaryGenerator
 
 class ApplePodcastExplorer:
     """Tool for exploring Apple podcast channels"""
@@ -118,18 +141,20 @@ class ApplePodcastExplorer:
             print(f"❌ Failed to set MLX Whisper model: {e}")
             return False
     
-    def search_podcast_channel(self, podcast_name: str) -> List[Dict]:
+    def search_podcast_channel(self, podcast_name: str, quiet: bool = False) -> List[Dict]:
         """
         Search for podcast channels
         
         Args:
             podcast_name: Podcast channel name
+            quiet: Whether to process silently
         
         Returns:
             List[Dict]: List of podcast channel information
         """
         try:
-            print(f"Searching for podcast channel: {podcast_name}")
+            if not quiet:
+                print(f"Searching for podcast channel: {podcast_name}")
             
             search_url = "https://itunes.apple.com/search"
             params = {
@@ -157,22 +182,25 @@ class ApplePodcastExplorer:
             return channels
             
         except Exception as e:
-            print(f"Error searching channel: {e}")
+            if not quiet:
+                print(f"Error searching channel: {e}")
             return []
     
-    def get_recent_episodes(self, feed_url: str, limit: int = 10) -> List[Dict]:
+    def get_recent_episodes(self, feed_url: str, limit: int = 10, quiet: bool = False) -> List[Dict]:
         """
         Get recent episodes of a podcast channel
         
         Args:
             feed_url: RSS subscription URL
             limit: Limit on the number of episodes returned
+            quiet: Whether to process silently
         
         Returns:
             List[Dict]: List of episode information
         """
         try:
-            print("Getting podcast episodes...")
+            if not quiet:
+                print("Getting podcast episodes...")
             
             feed = feedparser.parse(feed_url)
             episodes = []
@@ -216,7 +244,8 @@ class ApplePodcastExplorer:
             return episodes
             
         except Exception as e:
-            print(f"Error getting episodes: {e}")
+            if not quiet:
+                print(f"Error getting episodes: {e}")
             return []
     
     def display_channels(self, channels: List[Dict]) -> int:
@@ -532,7 +561,7 @@ class ApplePodcastExplorer:
         
         return episode_dir
 
-    def download_episode(self, episode: Dict, episode_num: int, channel_name: str) -> tuple[bool, Path]:
+    def download_episode(self, episode: Dict, episode_num: int, channel_name: str, quiet: bool = False) -> tuple[bool, Path]:
         """
         Download a single episode
         
@@ -540,12 +569,14 @@ class ApplePodcastExplorer:
             episode: Episode information
             episode_num: Episode number (1-based)
             channel_name: Channel name
+            quiet: Whether to process silently
         
         Returns:
             tuple[bool, Path]: (Whether download was successful, Episode folder path)
         """
         if not episode['audio_url']:
-            print(f"❌ No available audio URL for episode {episode_num}")
+            if not quiet:
+                print(f"❌ No available audio URL for episode {episode_num}")
             return False, None
         
         try:
@@ -558,10 +589,12 @@ class ApplePodcastExplorer:
             
             # Check if file already exists
             if filepath.exists():
-                print(f"⚠️  File already exists, skipping: {episode_dir.name}/{filename}")
+                if not quiet:
+                    print(f"⚠️  File already exists, skipping: {episode_dir.name}/{filename}")
                 return True, episode_dir
             
-            print(f"📥 Downloading: {episode['title']}")
+            if not quiet:
+                print(f"📥 Downloading: {episode['title']}")
             
             # Download file
             response = self.session.get(episode['audio_url'], stream=True)
@@ -572,7 +605,7 @@ class ApplePodcastExplorer:
             
             # Download with progress bar
             with open(filepath, 'wb') as f:
-                if total_size > 0:
+                if total_size > 0 and not quiet:
                     with tqdm(
                         total=total_size, 
                         unit='B', 
@@ -584,16 +617,18 @@ class ApplePodcastExplorer:
                                 f.write(chunk)
                                 pbar.update(len(chunk))
                 else:
-                    # If no file size info, just download
+                    # If no file size info, just download, or in silent mode directly download
                     for chunk in response.iter_content(chunk_size=8192):
                         if chunk:
                             f.write(chunk)
             
-            print(f"✅ Download complete")
+            if not quiet:
+                print(f"✅ Download complete")
             return True, episode_dir
             
         except Exception as e:
-            print(f"❌ Failed to download episode {episode_num}: {e}")
+            if not quiet:
+                print(f"❌ Failed to download episode {episode_num}: {e}")
             # If download failed, delete possible incomplete file
             if 'filepath' in locals() and filepath.exists():
                 filepath.unlink()
@@ -789,8 +824,6 @@ class ApplePodcastExplorer:
             
             # Hide MLX Whisper output in quiet mode
             if quiet:
-                import contextlib
-                import io
                 with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                     result = mlx_whisper.transcribe(
                         str(audio_file),
@@ -1027,8 +1060,6 @@ class ApplePodcastExplorer:
             print("❌ No valid episodes selected")
             return
         
-        # print(f"\nPreparing to download {len(selected_indices)} podcast episodes...")  # 隐藏此消息
-        
         # Download results
         success_count = 0
         total_count = len(selected_indices)
@@ -1045,11 +1076,6 @@ class ApplePodcastExplorer:
                 # Build downloaded file path
                 audio_file = episode_dir / "audio.mp3"
                 downloaded_files.append((audio_file, episode['title'], episode_dir))
-        
-        # 隐藏下载汇总
-        # print(f"\n📊 Download complete! Success: {success_count}/{total_count}")
-        # if success_count < total_count:
-        #     print(f"⚠️  {total_count - success_count} files failed to download")
         
         # Ask whether to transcribe
         if success_count > 0 and TRANSCRIPTION_AVAILABLE:
@@ -1385,3 +1411,692 @@ class ApplePodcastExplorer:
         except Exception as e:
             print(f"❌ Failed to save summary: {e}")
             return None
+
+    def auto_process_latest_episode(self, podcast_name: str, progress_tracker=None) -> tuple[bool, str]:
+        """
+        Automated processing of latest podcast episode - no user interaction
+        
+        Args:
+            podcast_name: Podcast name
+            progress_tracker: Progress tracker (for duplicate checking)
+            
+        Returns:
+            tuple[bool, str]: (Whether processing was successful, episode title)
+        """
+        try:
+            # Search channel (silent)
+            channels = self.search_podcast_channel(podcast_name, quiet=True)
+            if not channels:
+                return False, ""
+            
+            selected_channel = channels[0]  # Automatically select first matching channel
+            if not selected_channel['feed_url']:
+                return False, ""
+            
+            # Get latest episode (silent)
+            episodes = self.get_recent_episodes(selected_channel['feed_url'], 1, quiet=True)
+            if not episodes:
+                return False, ""
+            
+            episode = episodes[0]
+            episode_title = episode['title']
+            
+            # Check if already processed
+            if progress_tracker and progress_tracker.is_episode_processed(podcast_name, episode_title):
+                print(f"⏭️  {podcast_name} latest episode already processed, skipping")
+                return True, episode_title
+                
+            print(f"📥 Processing new episode: {episode_title[:50]}...")
+            
+            # Download processing (silent download process)
+            success, episode_dir = self.download_episode(episode, 1, selected_channel['name'], quiet=True)
+            if not success or not episode_dir:
+                return False, episode_title
+            
+            # Auto transcribe
+            audio_filepath = episode_dir / "audio.mp3"
+            if audio_filepath.exists():
+                transcribe_success = self.transcribe_audio_smart(
+                    audio_filepath, episode_title, 
+                    selected_channel['name'], episode_dir, auto_transcribe=True
+                )
+                if transcribe_success:
+                    # Auto summary - simulate transcribe_downloaded_files processing logic
+                    if self.gemini_client:
+                        # Use same summary generation logic as original code
+                        summary_success = self.auto_generate_summary_for_episode(
+                            episode_title, selected_channel['name'], episode_dir
+                        )
+                        return summary_success, episode_title
+                    return True, episode_title
+            
+            return False, episode_title
+            
+        except Exception as e:
+            return False, ""
+    
+    def auto_generate_summary_for_episode(self, episode_title: str, channel_name: str, episode_dir: Path) -> bool:
+        """
+        Automatically generate summary for single episode (simulate transcribe_downloaded_files logic)
+        
+        Args:
+            episode_title: Episode title
+            channel_name: Channel name
+            episode_dir: Episode directory
+            
+        Returns:
+            bool: Whether summarization was successful
+        """
+        try:
+            # Read transcript file
+            safe_channel = self.sanitize_filename(channel_name)
+            safe_title = self.sanitize_filename(episode_title)
+            transcript_filename = self.ensure_transcript_filename_length(safe_channel, safe_title)
+            transcript_filepath = episode_dir / transcript_filename
+            
+            if not transcript_filepath.exists():
+                return False
+            
+            # Read transcript content
+            with open(transcript_filepath, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Extract actual transcript text (skip metadata) - same logic as original code
+            if "## Transcript Content" in content:
+                transcript_text = content.split("## Transcript Content")[1].strip()
+            elif "## 转录内容" in content:
+                transcript_text = content.split("## 转录内容")[1].strip()
+            elif "---" in content:
+                # Fallback: content after ---
+                parts = content.split("---", 1)
+                if len(parts) > 1:
+                    transcript_text = parts[1].strip()
+                else:
+                    transcript_text = content
+            else:
+                transcript_text = content
+            
+            if len(transcript_text.strip()) < 100:
+                return False
+            
+            # Generate summary
+            summary = self.generate_summary(transcript_text, episode_title)
+            if not summary:
+                return False
+            
+            # For English version, no translation needed (default English summary)
+            language_choice = 'en'
+            final_summary = summary
+            
+            # Save summary
+            summary_path = self.save_summary(final_summary, episode_title, channel_name, language_choice, episode_dir)
+            return summary_path is not None
+            
+        except Exception as e:
+            return False
+
+
+class Podnet:
+    """Main application class for YouTube processing"""
+    
+    def __init__(self):
+        self.searcher = YouTubeSearcher()
+        self.extractor = TranscriptExtractor()
+        self.summarizer = SummaryGenerator()
+    
+    def search_youtube_podcast(self, podcast_name: str, num_episodes: int = 5) -> List[Dict]:
+        """Search for podcast episodes on YouTube using channel videos page"""
+        return self.searcher.search_youtube_podcast(podcast_name, num_episodes)
+    
+    def auto_process_channel_latest_video(self, channel_name: str, progress_tracker=None) -> tuple[bool, str]:
+        """
+        Automated processing of channel's latest video - no user interaction
+        
+        Args:
+            channel_name: Channel name (without @ symbol)
+            progress_tracker: Progress tracker (for duplicate checking)
+            
+        Returns:
+            tuple[bool, str]: (Whether processing was successful, video title)
+        """
+        try:
+            # Search for channel's latest video
+            episodes = self.searcher.search_youtube_podcast(channel_name, num_episodes=1)
+            if not episodes:
+                return False, ""
+            
+            episode = episodes[0]
+            video_title = episode.get('title', 'Unknown')
+            
+            # Check if already processed
+            if progress_tracker and progress_tracker.is_video_processed(channel_name, video_title):
+                print(f"⏭️  @{channel_name} latest video already processed, skipping")
+                return True, video_title
+            video_url = episode.get('url', '')
+            if not video_url:
+                return False, ""
+            
+            # Extract video ID
+            import re
+            video_id_match = re.search(r'(?:v=|/)([a-zA-Z0-9_-]{11})', video_url)
+            if not video_id_match:
+                return False, ""
+            
+            video_id = video_id_match.group(1)
+            
+            # Get video info
+            video_info = self.searcher.get_video_info(video_id)
+            title = episode.get('title', video_info.get('title', 'Unknown'))
+            channel_name_from_video = video_info.get('channel_name', channel_name)
+            published_date = episode.get('published_date', 'Recent')
+            
+            print(f"📥 Processing new video: {title[:50]}...")
+            
+            # Create episode directory
+            episode_dir = self.extractor.create_episode_folder(
+                channel_name_from_video, 
+                title, 
+                published_date
+            )
+            
+            # Try to extract transcript
+            transcript = self.extractor.extract_youtube_transcript(
+                video_id, 
+                video_url, 
+                title, 
+                episode_dir=episode_dir
+            )
+            
+            if transcript:
+                # Save transcript
+                transcript_filename = self.extractor.save_transcript(
+                    transcript, 
+                    title, 
+                    channel_name_from_video, 
+                    published_date, 
+                    episode_dir
+                )
+                
+                # Generate summary
+                if self.summarizer.gemini_client:
+                    summary = self.summarizer.generate_summary(transcript, title)
+                    if summary:
+                        # For English version, no translation needed (default English summary)
+                        final_summary = summary
+                        
+                        self.summarizer.save_summary(
+                            final_summary, 
+                            title, 
+                            episode_dir, 
+                            channel_name_from_video, 
+                            episode_dir
+                        )
+                
+                return True, title
+            
+            return False, title
+            
+        except Exception as e:
+            return False, ""
+
+    def run(self):
+        """Main application loop for YouTube"""
+        
+        while True:
+            # 修改询问信息类型的提示
+            print("\nSelect YouTube resource type:")
+            print("- name: Channel name (@name)")
+            print("- link: Video link")
+            print("- script: Direct text content")
+            print("\nExamples:")
+            print("  name: lex fridman, or lexfridman (channel's @name)")
+            print("  link: https://www.youtube.com/watch?v=qCbfTN-caFI (single video link)")
+            print("  script: Place text content in scripts/script.txt")
+            
+            content_type = input("\nPlease select type (name/link/script) or enter 'quit' to exit: ").strip().lower()
+            
+            if content_type in ['quit', 'exit', 'q']:
+                print("🔙 Back to main menu")
+                break
+            
+            if content_type not in ['name', 'link', 'script']:
+                print("Please select 'name', 'link', 'script' or 'quit'.")
+                continue
+            
+            # Handle script input
+            if content_type == 'script':
+                # Look for script content in scripts/script.txt
+                script_file_path = Path("scripts/script.txt")
+                
+                if not script_file_path.exists():
+                    print("❌ Script file not found!")
+                    print("Please create a file at scripts/script.txt")
+                    print("Place your transcript content in that file and try again.")
+                    continue
+                
+                try:
+                    with open(script_file_path, 'r', encoding='utf-8') as f:
+                        transcript = f.read().strip()
+                    
+                    if not transcript:
+                        print("❌ Script file is empty.")
+                        print("Please add your transcript content to scripts/script.txt")
+                        continue
+                    
+                    print(f"✅ Successfully loaded script from scripts/script.txt ({len(transcript)} characters)")
+                    
+                except Exception as e:
+                    print(f"❌ Error reading script file: {e}")
+                    continue
+                
+                if len(transcript) < 50:
+                    print("⚠️  Transcript content seems short, are you sure it's complete?")
+                    confirm = input("Continue anyway? (y/n): ").strip().lower()
+                    if confirm not in ['y', 'yes']:
+                        continue
+                
+                # Create episode object for script
+                selected_episodes = [{
+                    'title': f"Custom Script {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+                    'video_id': None,
+                    'url': None,
+                    'published_date': datetime.now().strftime('%Y-%m-%d'),
+                    'platform': 'script'
+                }]
+                
+                print(f"✅ Received script content ({len(transcript)} characters)")
+                
+                # 自动设置为获取转录文本和摘要
+                want_transcripts = True
+                want_summaries = True
+            
+            else:
+                # Handle name/link input (existing logic)
+                user_input = input(f"\nPlease enter {content_type}: ").strip()
+                
+                if not user_input:
+                    print(f"Please enter a {content_type}.")
+                    continue
+                
+                # Check if input is a YouTube link
+                is_single_video = False
+                is_channel_link = False
+                episodes = []
+                
+                if content_type == 'link' and ("youtube.com" in user_input or "youtu.be" in user_input):
+                    # Handle YouTube links
+                    if "/watch?v=" in user_input:
+                        # Single video link
+                        is_single_video = True
+                        # Extract video ID from link
+                        import re
+                        video_id_match = re.search(r'(?:v=|/)([a-zA-Z0-9_-]{11})', user_input)
+                        if video_id_match:
+                            video_id = video_id_match.group(1)
+                            # Create episode object for single video
+                            episodes = [{
+                                'title': self.searcher.get_video_title(video_id),
+                                'video_id': video_id,
+                                'url': f"https://www.youtube.com/watch?v={video_id}",
+                                'published_date': 'Unknown',
+                                'platform': 'youtube'
+                            }]
+                            print(f"🎥 Detected single video link: {user_input}")
+                        else:
+                            print("❌ Invalid YouTube video link format.")
+                            continue
+                    elif "/@" in user_input and "/videos" in user_input:
+                        # Channel videos link
+                        is_channel_link = True
+                        # Extract channel name from link
+                        channel_match = re.search(r'/@([^/]+)', user_input)
+                        if channel_match:
+                            channel_name = channel_match.group(1)
+                            print(f"🎥 Detected channel link: @{channel_name}")
+                        else:
+                            print("❌ Invalid YouTube channel link format.")
+                            continue
+                    else:
+                        print("❌ Unsupported YouTube link format. Please use video link (youtube.com/watch?v=...) or channel videos link (youtube.com/@channel/videos)")
+                        continue
+                elif content_type == 'link':
+                    print("❌ Please provide a valid YouTube link.")
+                    continue
+                else:
+                    # Regular name input - use existing logic
+                    channel_name = user_input
+                
+                if is_single_video:
+                    # Skip episode selection for single video
+                    selected_episodes = episodes
+                    print(f"\n✅ Processing single video")
+                else:
+                    # Ask how many recent episodes the user wants (for name or channel link)
+                    while True:
+                        try:
+                            num_episodes = input("How many recent episodes would you like to see? (default: 5): ").strip()
+                            if not num_episodes:
+                                num_episodes = 5
+                            else:
+                                num_episodes = int(num_episodes)
+                            
+                            if num_episodes <= 0:
+                                print("Please enter a positive integer.")
+                                continue
+                            elif num_episodes > 20:
+                                print("Maximum 20 episodes allowed.")
+                                continue
+                            else:
+                                break
+                        except ValueError:
+                            print("Please enter a valid number.")
+                            continue
+                    
+                    # Search for episodes on YouTube
+                    print(f"\n🔍 Searching YouTube for '{channel_name}' ...")
+                    
+                    episodes = self.searcher.search_youtube_podcast(channel_name, num_episodes)
+                    
+                    if not episodes:
+                        print("❌ No relevant episodes found. Please try other search terms.")
+                        continue
+                    
+                    # Display episodes with platform information
+                    print(f"\n📋 Found {len(episodes)} latest episodes:")
+                    for i, episode in enumerate(episodes, 1):
+                        print(f"{i}. 🎥 [YouTube] '{episode['title']}' - {episode['published_date']}")
+                    
+                    # Get episode selection
+                    episode_selection = input(f"\nWhich episodes are you interested in? (1-{len(episodes)}, e.g., '1,3,5' or '1-3' or 'all'): ").strip()
+                    
+                    if episode_selection.lower() == 'all':
+                        selected_episodes = episodes
+                    else:
+                        try:
+                            selected_indices = []
+                            # Split by comma first
+                            parts = episode_selection.split(',')
+                            for part in parts:
+                                part = part.strip()
+                                if '-' in part:
+                                    # Handle range format like "1-3"
+                                    start, end = part.split('-', 1)
+                                    start_idx = int(start.strip()) - 1
+                                    end_idx = int(end.strip()) - 1
+                                    selected_indices.extend(range(start_idx, end_idx + 1))
+                                else:
+                                    # Handle single number
+                                    selected_indices.append(int(part) - 1)
+                            
+                            # Remove duplicates and filter valid indices
+                            selected_indices = list(set(selected_indices))
+                            valid_indices = [i for i in selected_indices if 0 <= i < len(episodes)]
+                            
+                            # If no valid indices after filtering, raise error
+                            if not valid_indices:
+                                raise ValueError("No valid episode indices")
+                            
+                            selected_episodes = [episodes[i] for i in sorted(valid_indices)]
+                        except (ValueError, IndexError):
+                            print("Invalid episode selection, please try again.")
+                            continue
+                    
+                    if not selected_episodes:
+                        print("No valid episodes selected.")
+                        continue
+                    
+                    print(f"\n✅ Selected {len(selected_episodes)} episodes")
+                
+                # 自动设置为获取转录文本和摘要
+                want_transcripts = True
+                want_summaries = True
+            
+            # 英文版默认使用英文输出，不进行翻译
+            want_chinese = False
+            
+            # 处理每个节目
+            for episode in selected_episodes:
+                print(f"\n🎥 Processing: {episode['title']}")
+                print()  # 空行
+                
+                transcript_content = None
+                episode_dir = None
+                
+                if episode['platform'] == 'script':
+                    # Use the script content directly
+                    transcript_content = transcript
+                    print("⚡️ Ultra-fast transcription...")
+                    print("✅ Transcription complete")
+                    print()  # 空行
+                else:
+                    # Extract transcript from YouTube (existing logic)
+                    video_id = episode.get('video_id')
+                    if video_id:
+                        # Get detailed video info to create episode directory
+                        video_info = self.searcher.get_video_info(video_id)
+                        channel_name = video_info.get('channel_name', 'Unknown_Channel')
+                        
+                        # Use the published_date from search results first, fallback to video info
+                        published_date = episode.get('published_date', 'Unknown')
+                        if published_date in ['Unknown', 'Recent']:
+                            published_date = video_info.get('published_date', 'Recent')
+                        
+                        # Create episode directory using Apple Podcast style
+                        episode_dir = self.extractor.create_episode_folder(
+                            channel_name, 
+                            episode['title'], 
+                            published_date
+                        )
+                        
+                        print("⚡️ Ultra-fast transcription...")
+                        transcript_content = self.extractor.extract_youtube_transcript(
+                            video_id, 
+                            episode.get('url'), 
+                            episode['title'],
+                            episode_dir
+                        )
+                        if transcript_content:
+                            print("✅ Transcription complete")
+                            print()  # 空行
+                    
+                    # If no transcript available, create placeholder
+                    if not transcript_content and (want_transcripts or want_summaries):
+                        transcript_content = f"""# {episode['title']}
+
+Published: {episode['published_date']}
+Platform: YouTube
+Video URL: {episode.get('url', 'Not available')}
+
+---
+
+Note: No transcript available for this YouTube video.
+The video may not have auto-generated captions.
+
+You can:
+1. Try other episodes from this creator
+2. Check if captions are available manually on YouTube
+3. Request the creator to add captions
+"""
+                        print("✅ Transcription complete")
+                        print()  # 空行
+                
+                if not transcript_content:
+                    print("❌ Unable to extract transcript for this episode")
+                    continue
+                
+                # Save transcript if requested
+                if want_transcripts and transcript_content:
+                    if episode['platform'] == 'script':
+                        # For script content, use default save method
+                        transcript_path = self.extractor.save_transcript(transcript_content, episode['title'])
+                    else:
+                        # For YouTube content, use new directory structure
+                        video_info = self.searcher.get_video_info(episode.get('video_id', ''))
+                        channel_name = video_info.get('channel_name', 'Unknown_Channel')
+                        
+                        # Use published_date from search results first
+                        published_date = episode.get('published_date', 'Unknown')
+                        if published_date in ['Unknown', 'Recent']:
+                            published_date = video_info.get('published_date', 'Recent')
+                        
+                        transcript_path = self.extractor.save_transcript(
+                            transcript_content, 
+                            episode['title'], 
+                            channel_name, 
+                            published_date, 
+                            episode_dir
+                        )
+                
+                # Generate and save summary if requested
+                if want_summaries and transcript_content:
+                    # Check if transcript has actual content (not just placeholder)
+                    if len(transcript_content.strip()) > 100 and "Note: No transcript available" not in transcript_content:
+                        print("🧠 Generating summary...")
+                        summary = self.summarizer.generate_summary(transcript_content, episode['title'])
+                        if summary:
+                            # For English version, use English summary directly
+                            final_summary = summary
+                            
+                            if episode['platform'] == 'script':
+                                # For script content, use default save method
+                                summary_path = self.summarizer.save_summary(
+                                    final_summary, 
+                                    episode['title'], 
+                                    self.extractor.output_dir
+                                )
+                            else:
+                                # For YouTube content, use new directory structure
+                                video_info = self.searcher.get_video_info(episode.get('video_id', ''))
+                                channel_name = video_info.get('channel_name', 'Unknown_Channel')
+                                
+                                summary_path = self.summarizer.save_summary(
+                                    final_summary, 
+                                    episode['title'], 
+                                    self.extractor.output_dir,
+                                    channel_name,
+                                    episode_dir
+                                )
+                            print("✅ Summary complete")
+                            print()  # 空行
+                        else:
+                            print("❌ Unable to generate summary")
+                    else:
+                        print("⚠️  Skipping summary - no valid transcript content")
+            
+            # Ask about visualization if any content was processed
+            if selected_episodes:
+                self.ask_for_visualization(selected_episodes, want_chinese)
+            
+            # Ask if the user wants to continue
+            continue_choice = input("\nContinue in YouTube mode? (y/n): ").strip().lower()
+            if continue_choice not in ['y', 'yes', 'yes']:
+                print("🔙 Back to main menu")
+                break
+    
+    def ask_for_visualization(self, processed_episodes: List[Dict], want_chinese: bool):
+        """
+        Ask user if they want to generate visual stories
+        
+        Args:
+            processed_episodes: List of processed episodes
+            want_chinese: Whether to use Chinese
+        """
+        if not processed_episodes:
+            return
+        
+        print(f"\n🎨 Visual story generation? (y/n):")
+        visualize_choice = input().strip().lower()
+        
+        if visualize_choice not in ['y', 'yes']:
+            return
+        
+        # 自动选择基于摘要生成
+        content_choice = 's'
+        
+        # Import visual module based on language
+        try:
+            if want_chinese:
+                from .visual_ch import generate_visual_story
+            else:
+                from .visual_en import generate_visual_story
+        except ImportError:
+            visual_module = "visual_ch.py" if want_chinese else "visual_en.py"
+            print(f"❌ Visual module not found. Please ensure {visual_module} is in the podlens folder.")
+            return
+        
+        # Process each episode
+        visual_success_count = 0
+        
+        print("\n🎨 Adding colors...")
+        
+        for i, episode in enumerate(processed_episodes, 1):
+            if episode['platform'] == 'script':
+                title = episode['title']
+            else:
+                title = episode['title']
+            
+            # For YouTube episodes, find the correct file in new directory structure
+            if episode['platform'] == 'youtube':
+                # Get episode directory path
+                video_info = self.searcher.get_video_info(episode.get('video_id', ''))
+                channel_name = video_info.get('channel_name', 'Unknown_Channel')
+                published_date = episode.get('published_date', 'Recent')
+                
+                # Create episode directory path (same logic as in run method)
+                episode_dir = self.extractor.create_episode_folder(
+                    channel_name, 
+                    episode['title'], 
+                    published_date
+                )
+                
+                # Use the same filename generation logic as save_transcript and save_summary
+                safe_channel = self.extractor.sanitize_filename(channel_name) if channel_name else ""
+                safe_title = self.extractor.sanitize_filename(episode['title'])
+                
+                # Generate content part (same logic as in save functions)
+                if safe_channel:
+                    content_part = f"{safe_channel}_{safe_title}"
+                else:
+                    content_part = safe_title
+                
+                if content_choice == 't':
+                    # Use transcript - generate filename same as save_transcript
+                    source_filename = self.extractor.ensure_output_filename_length("Transcript_", content_part, ".md")
+                    content_type = "transcript"
+                else:
+                    # Use summary - generate filename same as save_summary
+                    def ensure_length(prefix, content, extension, max_len=255):
+                        fixed_len = len(prefix) + len(extension)
+                        if len(content) + fixed_len <= max_len:
+                            return f"{prefix}{content}{extension}"
+                        max_content = max_len - fixed_len
+                        truncated = content[:max_content]
+                        return f"{prefix}{truncated}{extension}"
+                    
+                    source_filename = ensure_length("Summary_", content_part, ".md")
+                    content_type = "summary"
+                
+                source_filepath = episode_dir / source_filename
+            else:
+                # For other platforms, use the old logic
+                safe_title = re.sub(r'[^\w\s-]', '', title).strip()
+                safe_title = re.sub(r'[-\s]+', '-', safe_title)
+                
+                if content_choice == 't':
+                    source_filename = self.extractor.ensure_transcript_filename_length(safe_title)
+                    content_type = "transcript"
+                else:
+                    source_filename = self.extractor.ensure_summary_filename_length(safe_title)
+                    content_type = "summary"
+                
+                source_filepath = self.extractor.output_dir / source_filename
+            
+            if not source_filepath.exists():
+                continue
+            
+            # Generate visual story
+            if generate_visual_story(str(source_filepath)):
+                visual_success_count += 1
+        
+        if visual_success_count > 0:
+            print("✅ Visualization complete")

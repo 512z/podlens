@@ -74,37 +74,31 @@ def show_status():
 
 def main():
     """Main function"""
-    # Add command line argument support for --background
+    # Check if called through autopodlens command
+    if 'autopodlens' in sys.argv[0]:
+        from .auto_en import start_automation
+        start_automation()
+        return
+    
+    # Add command line argument support for --auto and --status
     parser = argparse.ArgumentParser(description="PodLens - Intelligent Podcast Transcription Tool", add_help=False)
-    parser.add_argument("--background", action="store_true", help="Start background service mode")
-    parser.add_argument("--action", choices=["start", "status", "list", "add", "remove"], default="start", help="Background service action")
-    parser.add_argument("--podcast", help="Podcast name (for add/remove operations)")
+    parser.add_argument("--auto", action="store_true", help="Start 24x7 automation service")
+    parser.add_argument("--status", action="store_true", help="Show automation service status")
     
     # Parse known arguments, ignore others for compatibility
     args, unknown = parser.parse_known_args()
     
-    # If background mode, start background service
-    if args.background:
-        from .background import BackgroundService
-        print("🚀 Starting PodLens Background Service...")
-        service = BackgroundService(language="en")
-        
-        if args.action == "start":
-            service.start_background_service()
-        elif args.action == "status":
-            service.show_status()
-        elif args.action == "list":
-            service.list_manager.list_podcasts()
-        elif args.action == "add":
-            if args.podcast:
-                service.list_manager.add_podcast(args.podcast)
-            else:
-                print("❌ Please specify podcast name: --podcast 'Podcast Name'")
-        elif args.action == "remove":
-            if args.podcast:
-                service.list_manager.remove_podcast(args.podcast)
-            else:
-                print("❌ Please specify podcast name: --podcast 'Podcast Name'")
+    # If automation mode, start automation service
+    if args.auto:
+        from .auto_en import start_automation
+        print("🚀 Starting PodLens 24x7 Smart Automation Service...")
+        start_automation()
+        return
+    
+    # If status mode
+    if args.status:
+        from .auto_en import show_status as show_auto_status
+        show_auto_status()
         return
     
     # Keep original interactive mode unchanged

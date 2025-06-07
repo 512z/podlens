@@ -1,71 +1,94 @@
+#!/usr/bin/env python3
 """
-Apple Podcast related features
+PodLens Core Classes - 为自动化优化的核心类
 """
 
-import requests
-import feedparser
-from datetime import datetime
-from typing import List, Dict, Optional
 import os
-from pathlib import Path
+import sys
 import re
+import json
 import time
 import subprocess
-from tqdm import tqdm
+import contextlib
+import io
+import requests
+import feedparser
+import urllib.parse
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import List, Dict, Optional
 from dotenv import load_dotenv
-import google.generativeai as genai
+from tqdm import tqdm
 
 # Enhanced .env loading function
 def load_env_robust():
     """Load .env file from multiple possible locations"""
-    # Try loading from current working directory first
     if load_dotenv():
         return True
-    
-    # Try loading from home directory
     home_env = Path.home() / '.env'
     if home_env.exists() and load_dotenv(home_env):
         return True
-    
     return False
 
-# Load .env file with robust search
 load_env_robust()
 
-# Whisper transcription support
-# Whisper 转录支持
+# API Keys
+GROQ_API_KEY = os.getenv('GROQ_API_KEY')
+GROQ_AVAILABLE = bool(GROQ_API_KEY)
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+GEMINI_AVAILABLE = bool(GEMINI_API_KEY)
+
+# Initialize API clients
+if GROQ_AVAILABLE:
+    try:
+        from groq import Groq
+    except ImportError:
+        GROQ_AVAILABLE = False
+
+try:
+    import google.generativeai as genai
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+    genai = None
+
+# Check MLX Whisper availability
 try:
     import mlx_whisper
     import mlx.core as mx
     MLX_WHISPER_AVAILABLE = True
-    # 检查 MLX 设备可用性
     MLX_DEVICE = mx.default_device()
-    # print(f"🎯 MLX Whisper 可用，使用设备: {MLX_DEVICE}")
 except ImportError:
     MLX_WHISPER_AVAILABLE = False
-    # print("⚠️  MLX Whisper 不可用")
+    MLX_DEVICE = "Not Available"
 
-# Groq API 极速转录
+# YouTube transcript support
 try:
-    from groq import Groq
-    GROQ_API_KEY = os.getenv('GROQ_API_KEY')
-    GROQ_AVAILABLE = bool(GROQ_API_KEY)
-    # if GROQ_AVAILABLE:
-    #     print(f"🚀 Groq API 可用，已启用超快转录")
-    # else:
-    #     print("⚠️  未设置 Groq API 密钥")
+    from youtube_transcript_api import YouTubeTranscriptApi
+    from youtube_transcript_api.formatters import TextFormatter
+    YOUTUBE_TRANSCRIPT_AVAILABLE = True
 except ImportError:
-    GROQ_AVAILABLE = False
-    # print("⚠️  未安装 Groq SDK")
+    YOUTUBE_TRANSCRIPT_AVAILABLE = False
 
-# Gemini API 摘要支持
+# YouTube audio download fallback
 try:
-    GEMINI_AVAILABLE = True
+    import yt_dlp
+    YT_DLP_AVAILABLE = True
 except ImportError:
-    GEMINI_AVAILABLE = False
+    YT_DLP_AVAILABLE = False
 
-# 检查转录功能可用性
+# Local Whisper for YouTube
+try:
+    import whisper
+    WHISPER_AVAILABLE = True
+except ImportError:
+    WHISPER_AVAILABLE = False
+
+# Check transcription functionality availability
 TRANSCRIPTION_AVAILABLE = MLX_WHISPER_AVAILABLE or GROQ_AVAILABLE
+
+# Import YouTube components
+from .youtube_ch import YouTubeSearcher, TranscriptExtractor, SummaryGenerator
 
 
 class ApplePodcastExplorer:
@@ -119,18 +142,20 @@ class ApplePodcastExplorer:
             print(f"❌ 设置MLX Whisper模型失败: {e}")
             return False
     
-    def search_podcast_channel(self, podcast_name: str) -> List[Dict]:
+    def search_podcast_channel(self, podcast_name: str, quiet: bool = False) -> List[Dict]:
         """
         搜索播客频道
         
         Args:
             podcast_name: 播客频道名称
+            quiet: 是否静默处理
         
         Returns:
             List[Dict]: 播客频道信息列表
         """
         try:
-            print(f"正在搜索播客频道: {podcast_name}")
+            if not quiet:
+                print(f"正在搜索播客频道: {podcast_name}")
             
             search_url = "https://itunes.apple.com/search"
             params = {
@@ -158,22 +183,25 @@ class ApplePodcastExplorer:
             return channels
             
         except Exception as e:
-            print(f"搜索频道出错: {e}")
+            if not quiet:
+                print(f"搜索频道出错: {e}")
             return []
     
-    def get_recent_episodes(self, feed_url: str, limit: int = 10) -> List[Dict]:
+    def get_recent_episodes(self, feed_url: str, limit: int = 10, quiet: bool = False) -> List[Dict]:
         """
         获取播客频道的最新剧集
         
         Args:
             feed_url: RSS订阅地址
             limit: 返回剧集数量上限
+            quiet: 是否静默处理
         
         Returns:
             List[Dict]: 剧集信息列表
         """
         try:
-            print("正在获取播客剧集...")
+            if not quiet:
+                print("正在获取播客剧集...")
             
             feed = feedparser.parse(feed_url)
             episodes = []
@@ -217,7 +245,8 @@ class ApplePodcastExplorer:
             return episodes
             
         except Exception as e:
-            print(f"获取剧集出错: {e}")
+            if not quiet:
+                print(f"获取剧集出错: {e}")
             return []
     
     def display_channels(self, channels: List[Dict]) -> int:
@@ -465,7 +494,7 @@ class ApplePodcastExplorer:
         
         return episode_dir
 
-    def download_episode(self, episode: Dict, episode_num: int, channel_name: str) -> tuple[bool, Path]:
+    def download_episode(self, episode: Dict, episode_num: int, channel_name: str, quiet: bool = False) -> tuple[bool, Path]:
         """
         下载单个剧集
         
@@ -473,12 +502,14 @@ class ApplePodcastExplorer:
             episode: 剧集信息
             episode_num: 剧集编号（1基）
             channel_name: 频道名称
+            quiet: 是否静默处理
         
         Returns:
             tuple[bool, Path]: (下载是否成功, 剧集文件夹路径)
         """
         if not episode['audio_url']:
-            print(f"❌ 剧集{episode_num}没有可用音频链接")
+            if not quiet:
+                print(f"❌ 剧集{episode_num}没有可用音频链接")
             return False, None
         
         try:
@@ -491,10 +522,12 @@ class ApplePodcastExplorer:
             
             # 检查文件是否已存在
             if filepath.exists():
-                print(f"⚠️  文件已存在，跳过: {episode_dir.name}/{filename}")
+                if not quiet:
+                    print(f"⚠️  文件已存在，跳过: {episode_dir.name}/{filename}")
                 return True, episode_dir
             
-            print(f"📥 正在下载: {episode['title']}")
+            if not quiet:
+                print(f"📥 正在下载: {episode['title']}")
             
             # 下载文件
             response = self.session.get(episode['audio_url'], stream=True)
@@ -505,7 +538,7 @@ class ApplePodcastExplorer:
             
             # 带进度条下载
             with open(filepath, 'wb') as f:
-                if total_size > 0:
+                if total_size > 0 and not quiet:
                     with tqdm(
                         total=total_size, 
                         unit='B', 
@@ -517,16 +550,18 @@ class ApplePodcastExplorer:
                                 f.write(chunk)
                                 pbar.update(len(chunk))
                 else:
-                    # 没有文件大小信息时直接下载
+                    # 没有文件大小信息时直接下载，或静默模式下直接下载
                     for chunk in response.iter_content(chunk_size=8192):
                         if chunk:
                             f.write(chunk)
             
-            print(f"✅ 下载完成")
+            if not quiet:
+                print(f"✅ 下载完成")
             return True, episode_dir
             
         except Exception as e:
-            print(f"❌ 下载第{episode_num}集失败: {e}")
+            if not quiet:
+                print(f"❌ 下载第{episode_num}集失败: {e}")
             # 下载失败时删除可能的不完整文件
             if 'filepath' in locals() and filepath.exists():
                 filepath.unlink()
@@ -1390,3 +1425,708 @@ class ApplePodcastExplorer:
     def ensure_visual_filename_length(self, safe_channel: str, safe_title: str) -> str:
         """确保可视化文件名长度"""
         return self.ensure_output_filename_length("Visual_", safe_channel, safe_title, ".html")
+
+    def auto_process_latest_episode(self, podcast_name: str, progress_tracker=None) -> tuple[bool, str]:
+        """
+        自动化处理播客最新剧集 - 无用户交互
+        
+        Args:
+            podcast_name: 播客名称
+            progress_tracker: 进度跟踪器（用于重复检查）
+            
+        Returns:
+            tuple[bool, str]: (处理是否成功, episode标题)
+        """
+        try:
+            # 搜索频道（静默）
+            channels = self.search_podcast_channel(podcast_name, quiet=True)
+            if not channels:
+                return False, ""
+            
+            selected_channel = channels[0]  # 自动选择第一个匹配频道
+            if not selected_channel['feed_url']:
+                return False, ""
+            
+            # 获取最新剧集（静默）
+            episodes = self.get_recent_episodes(selected_channel['feed_url'], 1, quiet=True)
+            if not episodes:
+                return False, ""
+            
+            episode = episodes[0]
+            episode_title = episode['title']
+            
+            # 检查是否已处理过
+            if progress_tracker and progress_tracker.is_episode_processed(podcast_name, episode_title):
+                print(f"⏭️  {podcast_name} 最新剧集已处理过，跳过")
+                return True, episode_title
+                
+            print(f"📥 处理新剧集: {episode_title[:50]}...")
+            
+            # 下载处理（静默下载过程）
+            success, episode_dir = self.download_episode(episode, 1, selected_channel['name'], quiet=True)
+            if not success or not episode_dir:
+                return False, episode_title
+            
+            # 自动转录
+            audio_filepath = episode_dir / "audio.mp3"
+            if audio_filepath.exists():
+                transcribe_success = self.transcribe_audio_smart(
+                    audio_filepath, episode_title, 
+                    selected_channel['name'], episode_dir, auto_transcribe=True
+                )
+                if transcribe_success:
+                    # 自动总结 - 模拟transcribe_downloaded_files的处理逻辑
+                    if self.gemini_client:
+                        # 使用与原始代码相同的summary生成逻辑
+                        summary_success = self.auto_generate_summary_for_episode(
+                            episode_title, selected_channel['name'], episode_dir
+                        )
+                        return summary_success, episode_title
+                    return True, episode_title
+            
+            return False, episode_title
+            
+        except Exception as e:
+            return False, ""
+    
+    def auto_generate_summary_for_episode(self, episode_title: str, channel_name: str, episode_dir: Path) -> bool:
+        """
+        为单个剧集自动生成总结（模拟transcribe_downloaded_files的逻辑）
+        
+        Args:
+            episode_title: 剧集标题
+            channel_name: 频道名称
+            episode_dir: 剧集目录
+            
+        Returns:
+            bool: 总结是否成功
+        """
+        try:
+            # 读取转录文件
+            safe_channel = self.sanitize_filename(channel_name)
+            safe_title = self.sanitize_filename(episode_title)
+            transcript_filename = self.ensure_transcript_filename_length(safe_channel, safe_title)
+            transcript_filepath = episode_dir / transcript_filename
+            
+            if not transcript_filepath.exists():
+                return False
+            
+            # 读取转录内容
+            with open(transcript_filepath, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # 提取实际转录文本（跳过元数据）- 与原始代码完全相同的逻辑
+            if "## 转录内容" in content:
+                transcript_text = content.split("## 转录内容")[1].strip()
+            elif "## Transcript Content" in content:
+                transcript_text = content.split("## Transcript Content")[1].strip()
+            elif "---" in content:
+                # 备用: ---后内容
+                parts = content.split("---", 1)
+                if len(parts) > 1:
+                    transcript_text = parts[1].strip()
+                else:
+                    transcript_text = content
+            else:
+                transcript_text = content
+            
+            if len(transcript_text.strip()) < 100:
+                return False
+            
+            # 生成摘要
+            summary = self.generate_summary(transcript_text, episode_title)
+            if not summary:
+                return False
+            
+            # 翻译为中文（中文版默认行为）
+            language_choice = 'ch'
+            final_summary = summary
+            translated_summary = self.translate_to_chinese(summary)
+            if translated_summary:
+                final_summary = translated_summary
+            else:
+                language_choice = 'en'  # 回退英文
+            
+            # 保存摘要
+            summary_path = self.save_summary(final_summary, episode_title, channel_name, language_choice, episode_dir)
+            return summary_path is not None
+            
+        except Exception as e:
+            return False
+
+
+
+
+class Podnet:
+    """Main application class for YouTube processing"""
+    
+    def __init__(self):
+        self.searcher = YouTubeSearcher()
+        self.extractor = TranscriptExtractor()
+        self.summarizer = SummaryGenerator()
+    
+    def search_youtube_podcast(self, podcast_name: str, num_episodes: int = 5) -> List[Dict]:
+        """在YouTube上搜索播客剧集，使用频道视频页面"""
+        return self.searcher.search_youtube_podcast(podcast_name, num_episodes)
+    
+    def auto_process_channel_latest_video(self, channel_name: str, progress_tracker=None) -> tuple[bool, str]:
+        """
+        自动化处理频道最新视频 - 无用户交互
+        
+        Args:
+            channel_name: 频道名称（不含@符号）
+            progress_tracker: 进度跟踪器（用于重复检查）
+            
+        Returns:
+            tuple[bool, str]: (处理是否成功, 视频标题)
+        """
+        try:
+            # 搜索频道最新视频
+            episodes = self.searcher.search_youtube_podcast(channel_name, num_episodes=1)
+            if not episodes:
+                return False, ""
+            
+            episode = episodes[0]
+            video_title = episode.get('title', 'Unknown')
+            
+            # 检查是否已处理过
+            if progress_tracker and progress_tracker.is_video_processed(channel_name, video_title):
+                print(f"⏭️  @{channel_name} 最新视频已处理过，跳过")
+                return True, video_title
+            video_url = episode.get('url', '')
+            if not video_url:
+                return False, ""
+            
+            # 提取视频ID
+            import re
+            video_id_match = re.search(r'(?:v=|/)([a-zA-Z0-9_-]{11})', video_url)
+            if not video_id_match:
+                return False, ""
+            
+            video_id = video_id_match.group(1)
+            
+            # 获取视频信息
+            video_info = self.searcher.get_video_info(video_id)
+            title = episode.get('title', video_info.get('title', 'Unknown'))
+            channel_name_from_video = video_info.get('channel_name', channel_name)
+            published_date = episode.get('published_date', 'Recent')
+            
+            print(f"📥 处理新视频: {title[:50]}...")
+            
+            # 创建episode目录
+            episode_dir = self.extractor.create_episode_folder(
+                channel_name_from_video, 
+                title, 
+                published_date
+            )
+            
+            # 尝试提取转录
+            transcript = self.extractor.extract_youtube_transcript(
+                video_id, 
+                video_url, 
+                title, 
+                episode_dir=episode_dir
+            )
+            
+            if transcript:
+                # 保存转录
+                transcript_filename = self.extractor.save_transcript(
+                    transcript, 
+                    title, 
+                    channel_name_from_video, 
+                    published_date, 
+                    episode_dir
+                )
+                
+                # 生成总结
+                if self.summarizer.gemini_client:
+                    summary = self.summarizer.generate_summary(transcript, title)
+                    if summary:
+                        # 翻译总结为中文（自动化中文版）
+                        chinese_summary = self.summarizer.translate_to_chinese(summary)
+                        final_summary = chinese_summary if chinese_summary else summary
+                        
+                        self.summarizer.save_summary(
+                            final_summary, 
+                            title, 
+                            episode_dir, 
+                            channel_name_from_video, 
+                            episode_dir
+                        )
+                
+                return True, title
+            
+            return False, title
+            
+        except Exception as e:
+            print(f"❌ 自动处理YouTube视频失败: {e}")
+            return False, ""
+
+    def run(self):
+        """Main application loop for YouTube"""
+        
+        while True:
+            # 修改询问信息类型的提示
+            print("\n请选择youtube资源类型:")
+            print("- name: 频道名称(@name)")
+            print("- link: 视频链接")
+            print("- script: 直接提供文本内容")
+            print("\n示例：")
+            print("  name: lex fridman, or lexfridman (频道的@name)")
+            print("  link: https://www.youtube.com/watch?v=qCbfTN-caFI (单视频链接)")
+            print("  script: 将文本内容放入 scripts/script.txt")
+            
+            content_type = input("\n请选择类型 (name/link/script) 或输入 'quit' 退出: ").strip().lower()
+            
+            if content_type in ['quit', 'exit', 'q']:
+                print("🔙 返回主菜单")
+                break
+            
+            if content_type not in ['name', 'link', 'script']:
+                print("请选择 'name'、'link'、'script' 或 'quit'。")
+                continue
+            
+            # Handle script input
+            if content_type == 'script':
+                # Look for script content in scripts/script.txt
+                script_file_path = Path("scripts/script.txt")
+                
+                if not script_file_path.exists():
+                    print("❌ 未找到脚本文件！")
+                    print("请在 scripts/script.txt 路径下创建文件")
+                    print("请将您的转录内容放入该文件后重试。")
+                    continue
+                
+                try:
+                    with open(script_file_path, 'r', encoding='utf-8') as f:
+                        transcript = f.read().strip()
+                    
+                    if not transcript:
+                        print("❌ 脚本文件为空。")
+                        print("请将您的转录内容添加到 scripts/script.txt")
+                        continue
+                    
+                    print(f"✅ 成功加载脚本，来自 scripts/script.txt（{len(transcript)} 个字符）")
+                    
+                except Exception as e:
+                    print(f"❌ 读取脚本文件出错: {e}")
+                    continue
+                
+                if len(transcript) < 50:
+                    print("⚠️  转录内容似乎很短，您确定内容完整吗？")
+                    confirm = input("仍然继续？(y/n): ").strip().lower()
+                    if confirm not in ['y', 'yes']:
+                        continue
+                
+                # Create episode object for script
+                selected_episodes = [{
+                    'title': f"Custom Script {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+                    'video_id': None,
+                    'url': None,
+                    'published_date': datetime.now().strftime('%Y-%m-%d'),
+                    'platform': 'script'
+                }]
+                
+                print(f"✅ 已收到脚本内容（{len(transcript)} 个字符）")
+                
+                # 自动设置为获取转录文本和摘要
+                want_transcripts = True
+                want_summaries = True
+            
+            else:
+                # Handle name/link input (existing logic)
+                user_input = input(f"\n请输入 {content_type}: ").strip()
+                
+                if not user_input:
+                    print(f"请输入一个 {content_type}。")
+                    continue
+                
+                # Check if input is a YouTube link
+                is_single_video = False
+                is_channel_link = False
+                episodes = []
+                
+                if content_type == 'link' and ("youtube.com" in user_input or "youtu.be" in user_input):
+                    # Handle YouTube links
+                    if "/watch?v=" in user_input:
+                        # Single video link
+                        is_single_video = True
+                        # Extract video ID from link
+                        import re
+                        video_id_match = re.search(r'(?:v=|/)([a-zA-Z0-9_-]{11})', user_input)
+                        if video_id_match:
+                            video_id = video_id_match.group(1)
+                            # Create episode object for single video
+                            episodes = [{
+                                'title': self.searcher.get_video_title(video_id),
+                                'video_id': video_id,
+                                'url': f"https://www.youtube.com/watch?v={video_id}",
+                                'published_date': 'Unknown',
+                                'platform': 'youtube'
+                            }]
+                            print(f"🎥 检测到单个视频链接: {user_input}")
+                        else:
+                            print("❌ YouTube 视频链接格式无效。")
+                            continue
+                    elif "/@" in user_input and "/videos" in user_input:
+                        # Channel videos link
+                        is_channel_link = True
+                        # Extract channel name from link
+                        channel_match = re.search(r'/@([^/]+)', user_input)
+                        if channel_match:
+                            channel_name = channel_match.group(1)
+                            print(f"🎥 检测到频道链接: @{channel_name}")
+                        else:
+                            print("❌ YouTube 频道链接格式无效。")
+                            continue
+                    else:
+                        print("❌ 不支持的 YouTube 链接格式。请使用视频链接 (youtube.com/watch?v=...) 或频道视频链接 (youtube.com/@channel/videos)")
+                        continue
+                elif content_type == 'link':
+                    print("❌ 请提供有效的 YouTube 链接。")
+                    continue
+                else:
+                    # Regular name input - use existing logic
+                    channel_name = user_input
+                
+                if is_single_video:
+                    # Skip episode selection for single video
+                    selected_episodes = episodes
+                    print(f"\n✅ 正在处理单个视频")
+                else:
+                    # Ask how many recent episodes the user wants (for name or channel link)
+                    while True:
+                        try:
+                            num_episodes = input("您想查看最近多少期播客？(默认: 5): ").strip()
+                            if not num_episodes:
+                                num_episodes = 5
+                            else:
+                                num_episodes = int(num_episodes)
+                            
+                            if num_episodes <= 0:
+                                print("请输入一个正整数。")
+                                continue
+                            elif num_episodes > 20:
+                                print("最多只能选择 20 期。")
+                                continue
+                            else:
+                                break
+                        except ValueError:
+                            print("请输入有效的数字。")
+                            continue
+                    
+                    # Search for episodes on YouTube
+                    print(f"\n🔍 正在 YouTube 上搜索 '{channel_name}' ...")
+                    
+                    episodes = self.searcher.search_youtube_podcast(channel_name, num_episodes)
+                    
+                    if not episodes:
+                        print("❌ 未找到相关节目。请尝试其他搜索词。")
+                        continue
+                    
+                    # Display episodes with platform information
+                    print(f"\n📋 找到 {len(episodes)} 期最新节目：")
+                    for i, episode in enumerate(episodes, 1):
+                        print(f"{i}. 🎥 [YouTube] '{episode['title']}' - {episode['published_date']}")
+                    
+                    # Get episode selection
+                    episode_selection = input(f"\n您对哪些节目感兴趣？(1-{len(episodes)}，如 '1,3,5' 或 '1-3' 或 'all'): ").strip()
+                    
+                    if episode_selection.lower() == 'all':
+                        selected_episodes = episodes
+                    else:
+                        try:
+                            selected_indices = []
+                            # Split by comma first
+                            parts = episode_selection.split(',')
+                            for part in parts:
+                                part = part.strip()
+                                if '-' in part:
+                                    # Handle range format like "1-3"
+                                    start, end = part.split('-', 1)
+                                    start_idx = int(start.strip()) - 1
+                                    end_idx = int(end.strip()) - 1
+                                    selected_indices.extend(range(start_idx, end_idx + 1))
+                                else:
+                                    # Handle single number
+                                    selected_indices.append(int(part) - 1)
+                            
+                            # Remove duplicates and filter valid indices
+                            selected_indices = list(set(selected_indices))
+                            valid_indices = [i for i in selected_indices if 0 <= i < len(episodes)]
+                            
+                            # If no valid indices after filtering, raise error
+                            if not valid_indices:
+                                raise ValueError("No valid episode indices")
+                            
+                            selected_episodes = [episodes[i] for i in sorted(valid_indices)]
+                        except (ValueError, IndexError):
+                            print("节目选择无效，请重试。")
+                            continue
+                    
+                    if not selected_episodes:
+                        print("未选择有效的节目。")
+                        continue
+                    
+                    print(f"\n✅ 已选择 {len(selected_episodes)} 期节目")
+                
+                # 自动设置为获取转录文本和摘要
+                want_transcripts = True
+                want_summaries = True
+            
+            # 中文版默认使用中文输出和翻译
+            want_chinese = True
+            
+            # 处理每个节目
+            for episode in selected_episodes:
+                print(f"\n🎥 正在处理: {episode['title']}")
+                print()  # 空行
+                
+                transcript_content = None
+                episode_dir = None
+                
+                if episode['platform'] == 'script':
+                    # Use the script content directly
+                    transcript_content = transcript
+                    print("⚡️ 极速转录...")
+                    print("✅ 转录完成")
+                    print()  # 空行
+                else:
+                    # Extract transcript from YouTube (existing logic)
+                    video_id = episode.get('video_id')
+                    if video_id:
+                        # Get detailed video info to create episode directory
+                        video_info = self.searcher.get_video_info(video_id)
+                        channel_name = video_info.get('channel_name', 'Unknown_Channel')
+                        
+                        # Use the published_date from search results first, fallback to video info
+                        published_date = episode.get('published_date', 'Unknown')
+                        if published_date in ['Unknown', 'Recent']:
+                            published_date = video_info.get('published_date', 'Recent')
+                        
+                        # Create episode directory using Apple Podcast style
+                        episode_dir = self.extractor.create_episode_folder(
+                            channel_name, 
+                            episode['title'], 
+                            published_date
+                        )
+                        
+                        print("⚡️ 极速转录...")
+                        transcript_content = self.extractor.extract_youtube_transcript(
+                            video_id, 
+                            episode.get('url'), 
+                            episode['title'],
+                            episode_dir
+                        )
+                        if transcript_content:
+                            print("✅ 转录完成")
+                            print()  # 空行
+                    
+                    # If no transcript available, create placeholder
+                    if not transcript_content and (want_transcripts or want_summaries):
+                        transcript_content = f"""# {episode['title']}
+
+Published: {episode['published_date']}
+Platform: YouTube
+Video URL: {episode.get('url', 'Not available')}
+
+---
+
+Note: No transcript available for this YouTube video.
+The video may not have auto-generated captions.
+
+You can:
+1. Try other episodes from this creator
+2. Check if captions are available manually on YouTube
+3. Request the creator to add captions
+"""
+                        print("✅ 转录完成")
+                        print()  # 空行
+                
+                if not transcript_content:
+                    print("❌ 无法提取该节目的转录文本")
+                    continue
+                
+                # Save transcript if requested
+                if want_transcripts and transcript_content:
+                    if episode['platform'] == 'script':
+                        # For script content, use default save method
+                        transcript_path = self.extractor.save_transcript(transcript_content, episode['title'])
+                    else:
+                        # For YouTube content, use new directory structure
+                        video_info = self.searcher.get_video_info(episode.get('video_id', ''))
+                        channel_name = video_info.get('channel_name', 'Unknown_Channel')
+                        
+                        # Use published_date from search results first
+                        published_date = episode.get('published_date', 'Unknown')
+                        if published_date in ['Unknown', 'Recent']:
+                            published_date = video_info.get('published_date', 'Recent')
+                        
+                        transcript_path = self.extractor.save_transcript(
+                            transcript_content, 
+                            episode['title'], 
+                            channel_name, 
+                            published_date, 
+                            episode_dir
+                        )
+                
+                # Generate and save summary if requested
+                if want_summaries and transcript_content:
+                    # Check if transcript has actual content (not just placeholder)
+                    if len(transcript_content.strip()) > 100 and "Note: No transcript available" not in transcript_content:
+                        print("🧠 开始总结...")
+                        summary = self.summarizer.generate_summary(transcript_content, episode['title'])
+                        if summary:
+                            # Translate summary to Chinese if requested
+                            final_summary = summary
+                            if want_chinese:
+                                translated_summary = self.summarizer.translate_to_chinese(summary)
+                                if translated_summary:
+                                    final_summary = translated_summary
+                                else:
+                                    print("⚠️  翻译失败，使用原始摘要")
+                            
+                            if episode['platform'] == 'script':
+                                # For script content, use default save method
+                                summary_path = self.summarizer.save_summary(
+                                    final_summary, 
+                                    episode['title'], 
+                                    self.extractor.output_dir
+                                )
+                            else:
+                                # For YouTube content, use new directory structure
+                                video_info = self.searcher.get_video_info(episode.get('video_id', ''))
+                                channel_name = video_info.get('channel_name', 'Unknown_Channel')
+                                
+                                summary_path = self.summarizer.save_summary(
+                                    final_summary, 
+                                    episode['title'], 
+                                    self.extractor.output_dir,
+                                    channel_name,
+                                    episode_dir
+                                )
+                            print("✅ 总结完成")
+                            print()  # 空行
+                        else:
+                            print("❌ 无法生成摘要")
+                    else:
+                        print("⚠️  跳过摘要 - 无有效转录内容")
+            
+            # Ask about visualization if any content was processed
+            if selected_episodes:
+                self.ask_for_visualization(selected_episodes, want_chinese)
+            
+            # Ask if the user wants to continue
+            continue_choice = input("\n继续在 YouTube 模式下吗？(y/n): ").strip().lower()
+            if continue_choice not in ['y', 'yes', 'yes']:
+                print("🔙 返回主菜单")
+                break
+    
+    def ask_for_visualization(self, processed_episodes: List[Dict], want_chinese: bool):
+        """
+        询问用户是否要生成可视化故事
+        
+        Args:
+            processed_episodes: 已处理的剧集列表
+            want_chinese: 是否使用中文
+        """
+        if not processed_episodes:
+            return
+        
+        print(f"\n🎨 可视化故事生成?(y/n):")
+        visualize_choice = input().strip().lower()
+        
+        if visualize_choice not in ['y', 'yes', '是']:
+            return
+        
+        # 自动选择基于摘要生成
+        content_choice = 's'
+        
+        # Import visual module based on language
+        try:
+            if want_chinese:
+                from .visual_ch import generate_visual_story
+            else:
+                from .visual_en import generate_visual_story
+        except ImportError:
+            visual_module = "visual_ch.py" if want_chinese else "visual_en.py"
+            print(f"❌ 未找到可视化模块。请确保{visual_module}在podlens文件夹中。")
+            return
+        
+        # Process each episode
+        visual_success_count = 0
+        
+        print("\n🎨 添加色彩...")
+        
+        for i, episode in enumerate(processed_episodes, 1):
+            if episode['platform'] == 'script':
+                title = episode['title']
+            else:
+                title = episode['title']
+            
+            # For YouTube episodes, find the correct file in new directory structure
+            if episode['platform'] == 'youtube':
+                # Get episode directory path
+                video_info = self.searcher.get_video_info(episode.get('video_id', ''))
+                channel_name = video_info.get('channel_name', 'Unknown_Channel')
+                published_date = episode.get('published_date', 'Recent')
+                
+                # Create episode directory path (same logic as in run method)
+                episode_dir = self.extractor.create_episode_folder(
+                    channel_name, 
+                    episode['title'], 
+                    published_date
+                )
+                
+                # Use the same filename generation logic as save_transcript and save_summary
+                safe_channel = self.extractor.sanitize_filename(channel_name) if channel_name else ""
+                safe_title = self.extractor.sanitize_filename(episode['title'])
+                
+                # Generate content part (same logic as in save functions)
+                if safe_channel:
+                    content_part = f"{safe_channel}_{safe_title}"
+                else:
+                    content_part = safe_title
+                
+                if content_choice == 't':
+                    # Use transcript - generate filename same as save_transcript
+                    source_filename = self.extractor.ensure_output_filename_length("Transcript_", content_part, ".md")
+                    content_type = "转录文本"
+                else:
+                    # Use summary - generate filename same as save_summary
+                    def ensure_length(prefix, content, extension, max_len=255):
+                        fixed_len = len(prefix) + len(extension)
+                        if len(content) + fixed_len <= max_len:
+                            return f"{prefix}{content}{extension}"
+                        max_content = max_len - fixed_len
+                        truncated = content[:max_content]
+                        return f"{prefix}{truncated}{extension}"
+                    
+                    source_filename = ensure_length("Summary_", content_part, ".md")
+                    content_type = "摘要"
+                
+                source_filepath = episode_dir / source_filename
+            else:
+                # For other platforms, use the old logic
+                safe_title = re.sub(r'[^\w\s-]', '', title).strip()
+                safe_title = re.sub(r'[-\s]+', '-', safe_title)
+                
+                if content_choice == 't':
+                    source_filename = self.extractor.ensure_transcript_filename_length(safe_title)
+                    content_type = "转录文本"
+                else:
+                    source_filename = self.extractor.ensure_summary_filename_length(safe_title)
+                    content_type = "摘要"
+                
+                source_filepath = self.extractor.output_dir / source_filename
+            
+            if not source_filepath.exists():
+                continue
+            
+            # Generate visual story
+            if generate_visual_story(str(source_filepath)):
+                visual_success_count += 1
+        
+        if visual_success_count > 0:
+            print("✅ 可视化完成")
+

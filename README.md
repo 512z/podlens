@@ -1,6 +1,8 @@
-# 🎧 PodLens - Free Podcast & Youtube Transcription & Summary AI Agent
+# 🎧 PodLens - Free Podwise: Podcast & Youtube Transcription & Summary AI Agent
 
 🧠 For knowledge-seekers who want to learn from audio content more effectively.
+
+🤖 Now with 24x7 automation service!
 
 A fast & cost-free & AI-powered tool that:
 - 🎙️ transcribes audio content from Apple Podcast and YouTube platforms
@@ -21,12 +23,11 @@ A fast & cost-free & AI-powered tool that:
 - 🤖 **AI Summary**: Generate intelligent summaries using Gemini AI
 - 🎨 **Interactive Visualization**: Transform content into beautiful, interactive HTML stories with data visualizations
 - 🌍 **Bilingual**: Supports both Chinese and English output
-- 📁 **File Management**: Automatically organize output files
+- 🗂️ **Episode-based Organization**: Each episode gets its own dedicated folder with all related files
+- 🤖 **Automation API**: Programmatic access for batch processing and integration with other workflows
+- 📁 **Smart File Management**: Automatically organize output files with clear hierarchical structure
 - 🔄 **Language Switching**: Choose your preferred interface language
 
-## 📝 Note:
-
-*For audio files larger than 25MB after compression, the transcription will be done by MLX Whisper, which is local for Mac users, and not yet available for Windows users. Windows user can still use Groq API for transcription for files smaller than 25MB.*
 
 ## 📦 Installation
 
@@ -60,21 +61,81 @@ GEMINI_API_KEY=your_gemini_api_key_here
 
 ## 🚀 Usage
 
-### English Version
+### Interactive Mode
 ```bash
+# English version
 podlens
+
+# Chinese version  
+pod
 ```
 
-### Chinese Version  
+### Automation Service (NEW!)
 ```bash
-podlens-zh
-# or
-podlens-ch
+# English version 24x7 automation service
+autopodlens
+
+# Chinese version 24x7 automation service  
+autopod
+
+# Check automation status
+autopodlens --status  # English version
+autopod --status      # Chinese version
 ```
+
+### Configuration Files (Auto-Generated)
+When you first run the automation service, PodLens will automatically create configuration files:
+
+**`my_pod.md`** (auto-generated with examples):
+```markdown
+# PodLens Podcast Subscription List
+# This file manages the podcast channels you want to automatically process.
+
+## How to Use
+# - One podcast name per line
+# - Supports podcast names searchable on Apple Podcast
+# - Lines starting with `#` are comments and will be ignored
+# - Empty lines will also be ignored
+
+## Example Podcasts
+thoughts on the market
+# or: thoughts on the market - morgan stanley
+
+## Business Podcasts
+
+
+## Tech Podcasts
+```
+
+**`my_tube.md`** (auto-generated with examples):
+```markdown  
+# YouTube Channel Subscription List
+
+# This file manages the YouTube channels you want to automatically process.
+
+## How to Use
+# - One channel name per line (no @ symbol needed)
+# - Channel name is the part after @ in YouTube URL
+# - Example: https://www.youtube.com/@Bloomberg_Live/videos → fill in Bloomberg_Live
+# - Lines starting with `#` are comments and will be ignored
+# - Empty lines will also be ignored
+
+## Example Channels
+Bloomberg_Live
+
+
+## Business Channels
+
+
+## Tech Channels
+
+```
+
+Simply edit these files to add or remove your preferred podcasts and YouTube channels.
 
 ### Interactive Interface:
 ```
-🎧🎥 Podcast Transcription & Summary Tool (English Version)
+🎧🎥 Media Transcription & Summary Tool
 ==================================================
 Supports Apple Podcast and YouTube platforms
 ==================================================
@@ -84,51 +145,136 @@ Supports Apple Podcast and YouTube platforms
 2. YouTube  
 0. Exit
 
-Please enter your choice (1/2/0): 
+Please enter your choice (1/2/0): 1
+
+🎧 You selected Apple Podcast
+Please enter the podcast channel name: thoughts on the market
+
+📥 Downloading: Episode Title...
+⚡️ Ultra-fast transcription...
+🧠 Summarizing...
+🎨 Visual Story Generation?(y/n): 
 ```
 
 ## 🎯 Available Commands
 
+### Interactive Commands
 | Command | Description |
 |---------|-------------|
-| `podlens` | Launch default interface (English) |
-| `podlens-en` | Launch English interface |
-| `podlens-zh` or `podlens-ch` | Launch Chinese interface |
+| `podlens` | English version interactive interface |
+| `pod` | Chinese version interactive interface |
+
+### Automation Service Commands
+| Command | Description |
+|---------|-------------|
+| `autopodlens` | English version 24x7 automation service (hourly auto-processing) |
+| `autopod` | Chinese version 24x7 automation service (hourly auto-processing) |
+| `autopodlens --status` | Check English version automation service status |
+| `autopod --status` | Check Chinese version automation service status |
+
+**Configuration Files (Auto-Generated):**
+- `my_pod.md` - Configure monitored podcasts (created automatically)
+- `my_tube.md` - Configure monitored YouTube channels (created automatically)
+- `.podlens/setting` - Automation frequency and monitoring settings (created automatically)
+- `.podlens/status.json` - Service status and processed episodes tracking (created automatically)
 
 
 ## 📋 Workflow Example
 
 ### Apple Podcast Workflow
-1. **Search Channel**: Enter podcast name (e.g., "Lex Fridman")
-2. **Select Channel**: Choose from search results
+1. **Search Channel**: Enter podcast name (e.g., "thoughts on the market")
+2. **Select Channel**: Choose from search results  
 3. **Browse Episodes**: View recent episodes
-4. **Download & Transcribe**: Select episodes for processing
-5. **Generate Summary**: Optional AI-powered summary
-6. **Create Visualization**: Generate interactive HTML stories with modern UI and data visualizations
+4. **Select Episodes**: Choose episodes for processing
+5. **Auto Processing**: Automatic download, transcription and AI summary
+6. **Create Visualization**: Optional interactive HTML stories with modern UI and data visualizations
 
 ### YouTube Workflow  
 1. **Input Source**: 
-   - Channel name (e.g., "Lex Fridman")
+   - Channel name (e.g., "Bloomberg_Live")
    - Direct video URL
    - Transcript text file
 2. **Select Episodes**: Choose videos to process
-3. **Extract Content**: Automatic transcript extraction
-4. **Generate Summary**: AI-powered analysis
-5. **Create Visualization**: Generate interactive HTML stories with modern UI and data visualizations
+3. **Auto Processing**: Automatic transcript extraction and AI summary
+4. **Create Visualization**: Optional interactive HTML stories with modern UI and data visualizations
+
+### Automation Workflow (NEW!)
+1. **Launch Service**: Run `autopodlens` (English) or `autopod` (Chinese) - configuration files auto-created
+2. **Configure**: Edit the auto-generated `my_pod.md` and `my_tube.md` with your subscriptions
+3. **24x7 Monitoring**: Service checks for new content every hour
+4. **Auto Processing**: New episodes automatically transcribed and summarized
+5. **Smart Deduplication**: Already processed content is skipped automatically
 
 ## 📁 Output Structure
 
 ```
 your-project/
-├── outputs/           # Transcripts, summaries, and interactive visualizations
-│   ├── Transcript_*.md      # Original transcriptions
-│   ├── Summary_*.md         # AI-generated summaries  
-│   └── Visual_*.html        # Interactive HTML stories
-├── media/            # Downloaded audio files (temporary)
-└── .env             # Your API keys
+├── outputs/           # Episode-based organized content
+│   └── [Channel Name]/
+│       └── [Date]/
+│           └── [Episode Title]/
+│               ├── audio.mp3        # Downloaded audio file (will be deleted after processing)
+│               ├── Transcript_[Details].md    # Transcription
+│               ├── Summary_[Details].md       # AI-generated summary
+│               └── Visual_[Details].html      # Interactive visualization
+├── .podlens/         # Automation configuration
+│   ├── setting       # Service frequency and monitoring settings
+│   └── status.json   # Processed episodes tracking
+├── my_pod.md         # Monitored podcasts configuration
+├── my_tube.md        # Monitored YouTube channels configuration
+└── .env              # Your API keys
 ```
 
 ## 🛠️ Advanced Features
+
+### Episode-based File Organization
+- **Dedicated Folders**: Each episode gets its own folder for clean organization
+- **Consistent Structure**: All related files (audio, transcript, summary, visualization) in one place
+
+### 24x7 Automation Service  
+- **Smart Monitoring**: Automatic tracking of podcasts and YouTube channels via `my_pod.md` and `my_tube.md` configuration files
+- **Intelligent Deduplication**: Already processed episodes are automatically skipped based on `.podlens/status.json` tracking
+- **Hourly Processing**: Service checks for new content every hour and processes automatically
+- **Channel Format**: YouTube channels use simple names (e.g., `Bloomberg_Live` for `@Bloomberg_Live`)
+- **Episode Organization**: Date-based folder structure with detailed file naming for easy navigation
+- **Status Tracking**: View service status and processing history with `--status` flag
+
+### Automation Service Example
+```bash
+# Start the automation service
+$ autopodlens
+🤖 Starting PodLens 24x7 Intelligent Automation Service
+
+⏰ Running frequency: hourly
+🎧 Monitoring podcasts: 1
+📺 Monitoring YouTube channels: 1
+Press Ctrl+Z to stop service
+
+⏰ Starting hourly check
+🔍 Checking podcast: thoughts on the market
+📥 Processing new episode: Standing by Our Outlook...
+✅ thoughts on the market processing complete
+🔍 Checking YouTube channel: @Bloomberg_Live
+📥 Processing new video: Jennifer Doudna on Future of Gene Editing \u0026 I...
+✅ @Bloomberg_Live processing complete
+✅ Check complete - Podcasts: 1/1, YouTube: 1/1
+```
+
+### Service Status Monitoring
+```bash
+# Check automation service status
+$ autopodlens --status
+📊 PodLens Intelligent Automation Service Status:
+  Running frequency: 1.0 hours
+  Monitor podcasts: Enabled
+  Monitor YouTube: Enabled
+
+📻 Monitoring 1 podcasts:
+  - thoughts on the market
+
+📺 Monitoring 1 YouTube channels:
+  - @Bloomberg_Live
+```
 
 ### Smart Transcription Logic
 - **Small files (<25MB)**: Groq API ultra-fast transcription

@@ -3,7 +3,7 @@ YouTube related features
 """
 
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 import os
 from pathlib import Path
@@ -99,6 +99,42 @@ class YouTubeSearcher:
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
         })
     
+    def _fix_encoding(self, text: str) -> str:
+        """
+        智能修复字符编码问题 - 精确处理Unicode转义序列
+        
+        Args:
+            text: 原始文本
+            
+        Returns:
+            str: 修复后的文本
+        """
+        if not text:
+            return text
+            
+        try:
+            # 只处理Unicode转义序列，如 \u0026 -> &
+            if '\\u' in text:
+                import re
+                # 使用正则表达式精确替换Unicode转义序列
+                def unicode_replacer(match):
+                    try:
+                        return match.group(0).encode().decode('unicode_escape')
+                    except:
+                        return match.group(0)
+                
+                # 只匹配和替换 \uXXXX 格式的Unicode转义序列
+                result = re.sub(r'\\u[0-9a-fA-F]{4}', unicode_replacer, text)
+                return result
+            
+            # 其他情况直接返回原始字符串
+            # 大部分情况下YouTube返回的就是正确的UTF-8编码
+            return text
+            
+        except Exception:
+            # 如果处理失败，返回原文本
+            return text
+    
     def get_video_title(self, video_id: str) -> str:
         """Get video title from video ID"""
         try:
@@ -111,14 +147,75 @@ class YouTubeSearcher:
             title_match = re.search(r'"title":"([^"]+)"', response.text)
             if title_match:
                 title = title_match.group(1)
-                # Decode unicode escapes
-                title = title.encode().decode('unicode_escape')
+                # Use intelligent encoding fix
+                title = self._fix_encoding(title)
                 return title
             else:
                 return "YouTube Video"
         except Exception as e:
             print(f"无法获取视频标题: {e}")
             return "YouTube Video"
+
+    def get_video_info(self, video_id: str) -> Dict:
+        """
+        获取视频信息：标题、频道名称、发布时间
+        
+        Args:
+            video_id: YouTube视频ID
+            
+        Returns:
+            Dict: 包含标题、频道名称、发布时间的字典
+        """
+        try:
+            video_url = f"https://www.youtube.com/watch?v={video_id}"
+            response = self.session.get(video_url, timeout=10)
+            response.raise_for_status()
+            
+            import re
+            
+            # 提取标题
+            title = "Unknown Title"
+            title_match = re.search(r'"title":"([^"]+)"', response.text)
+            if title_match:
+                title = title_match.group(1)
+                title = self._fix_encoding(title)
+            
+            # 提取频道名称
+            channel_name = "Unknown Channel"
+            # 尝试多种模式提取频道名称
+            channel_patterns = [
+                r'"channelName":"([^"]+)"',
+                r'"author":"([^"]+)"',
+                r'"ownerChannelName":"([^"]+)"',
+                r'<link itemprop="name" content="([^"]+)">'
+            ]
+            
+            for pattern in channel_patterns:
+                channel_match = re.search(pattern, response.text)
+                if channel_match:
+                    channel_name = channel_match.group(1).strip()
+                    # 智能编码处理
+                    channel_name = self._fix_encoding(channel_name)
+                    break
+            
+            # 提取发布时间 - 这里我们从页面上得到的通常是相对时间
+            published_date = "Recent"
+            
+            return {
+                'title': title,
+                'channel_name': channel_name,
+                'published_date': published_date,
+                'video_id': video_id
+            }
+            
+        except Exception as e:
+            print(f"获取视频信息失败: {e}")
+            return {
+                'title': "Unknown Title", 
+                'channel_name': "Unknown Channel",
+                'published_date': "Recent",
+                'video_id': video_id
+            }
     
     def search_youtube_podcast(self, podcast_name: str, num_episodes: int = 5) -> List[Dict]:
         """Search for podcast episodes on YouTube using channel videos page"""
@@ -250,10 +347,6 @@ class TranscriptExtractor:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
         
-        # Create media folder for audio download fallback
-        self.media_dir = Path("media")
-        self.media_dir.mkdir(exist_ok=True)
-        
         # Initialize session for downloads
         self.session = requests.Session()
         self.session.headers.update({
@@ -285,6 +378,92 @@ class TranscriptExtractor:
         if len(filename) > 200:
             filename = filename[:200]
         return filename
+
+    def parse_youtube_relative_time(self, time_str: str) -> str:
+        """
+        解析YouTube的相对时间为具体日期
+        
+        Args:
+            time_str: YouTube返回的时间字符串，如 "14 hours ago", "2 days ago"
+            
+        Returns:
+            str: YYYY-MM-DD格式的日期
+        """
+        if not time_str or time_str in ['Recent', 'Unknown']:
+            return datetime.now().strftime('%Y-%m-%d')
+        
+        # 规范化输入
+        time_str = time_str.lower().strip()
+        
+        # 匹配各种时间格式
+        patterns = [
+            (r'(\d+)\s*(second|minute|hour)s?\s*ago', 'hours'),
+            (r'(\d+)\s*hours?\s*ago', 'hours'),
+            (r'(\d+)\s*days?\s*ago', 'days'),
+            (r'(\d+)\s*weeks?\s*ago', 'weeks'),
+            (r'(\d+)\s*months?\s*ago', 'months'),
+            (r'(\d+)\s*years?\s*ago', 'years'),
+        ]
+        
+        now = datetime.now()
+        
+        for pattern, unit in patterns:
+            match = re.search(pattern, time_str)
+            if match:
+                amount = int(match.group(1))
+                
+                if unit == 'hours':
+                    target_date = now - timedelta(hours=amount)
+                elif unit == 'days':
+                    target_date = now - timedelta(days=amount)
+                elif unit == 'weeks':
+                    target_date = now - timedelta(weeks=amount)
+                elif unit == 'months':
+                    target_date = now - timedelta(days=amount * 30)  # 近似
+                elif unit == 'years':
+                    target_date = now - timedelta(days=amount * 365)  # 近似
+                else:
+                    target_date = now
+                
+                return target_date.strftime('%Y-%m-%d')
+        
+        # 如果无法解析，返回今天的日期
+        return now.strftime('%Y-%m-%d')
+
+    def create_episode_folder(self, channel_name: str, episode_title: str, published_date_str: str) -> Path:
+        """
+        创建YouTube剧集文件夹（Apple Podcast风格）
+        
+        Args:
+            channel_name: 频道名称
+            episode_title: 剧集标题
+            published_date_str: 发布时间字符串（如"14 hours ago"）
+            
+        Returns:
+            Path: 剧集文件夹路径
+        """
+        # 清理文件名
+        safe_channel = self.sanitize_filename(channel_name)
+        safe_title = self.sanitize_filename(episode_title)
+        
+        # 限制文件夹名长度
+        if len(safe_channel) > 50:
+            safe_channel = safe_channel[:50]
+        if len(safe_title) > 100:
+            safe_title = safe_title[:100]
+        
+        # 解析日期
+        date_folder = self.parse_youtube_relative_time(published_date_str)
+        
+        # 创建目录结构：outputs/channel_name/date/episode_name/
+        channel_dir = self.output_dir / safe_channel
+        date_dir = channel_dir / date_folder
+        episode_dir = date_dir / safe_title
+        
+        # 创建目录
+        episode_dir.mkdir(parents=True, exist_ok=True)
+        
+        return episode_dir
     
     def ensure_filename_length(self, prefix: str, safe_title: str, extension: str = ".mp3") -> str:
         """
@@ -321,28 +500,28 @@ class TranscriptExtractor:
         size_bytes = os.path.getsize(filepath)
         return size_bytes / (1024 * 1024)
     
-    def download_youtube_audio(self, video_url: str, title: str) -> Optional[Path]:
-        """Download YouTube video audio using yt-dlp"""
+    def download_youtube_audio(self, video_url: str, title: str, episode_dir: Path = None) -> Optional[Path]:
+        """Download YouTube video audio using yt-dlp to episode directory"""
         if not YT_DLP_AVAILABLE:
             print("❌ 未检测到yt-dlp，无法下载音频")
             return None
         
         try:
+            # Use episode directory if provided, otherwise use output directory
+            download_dir = episode_dir if episode_dir else self.output_dir
+            
             # Clean filename
             safe_title = self.sanitize_filename(title)
             audio_filename = self.ensure_filename_length("youtube_", safe_title)
-            audio_filepath = self.media_dir / audio_filename
+            audio_filepath = download_dir / audio_filename
             
             # Check if file already exists
             if audio_filepath.exists():
-                print(f"⚠️  音频文件已存在: {audio_filename}")
                 return audio_filepath
-            
-            print(f"📥 正在下载YouTube音频: {title}")
             
             ydl_opts = {
                 'format': 'bestaudio/best',
-                'outtmpl': str(self.media_dir / f"youtube_{safe_title}.%(ext)s"),
+                'outtmpl': str(download_dir / f"youtube_{safe_title}.%(ext)s"),
                 'extractaudio': True,
                 'audioformat': 'mp3',
                 'audioquality': '192',
@@ -357,7 +536,6 @@ class TranscriptExtractor:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([video_url])
             
-            print(f"✅ 音频下载完成: {audio_filename}")
             return audio_filepath
             
         except Exception as e:
@@ -368,10 +546,7 @@ class TranscriptExtractor:
         """智能两级压缩音频文件至Groq API限制以下 (从Apple模块复制)
         首选64k保证质量，如果仍>25MB则降至48k"""
         try:
-            print(f"🔧 正在压缩音频文件: {input_file.name}")
-            
-            # 第一级压缩：64k (优先保证质量)
-            print("📊 第一级压缩: 16KHz 单声道, 64kbps MP3")
+            print("🔧 正在压缩...")
             
             # 生成安全的临时文件名，不超过255字符
             original_name = output_file.stem  # 不含扩展名的文件名
@@ -409,18 +584,13 @@ class TranscriptExtractor:
             
             # 检查64k压缩后的文件大小
             compressed_size_mb = self.get_file_size_mb(temp_64k_file)
-            print(f"📊 64k压缩后大小: {compressed_size_mb:.1f}MB")
             
             if compressed_size_mb <= 25:
                 # 64k压缩满足要求，使用64k结果
                 temp_64k_file.rename(output_file)
-                print(f"✅ 64k压缩完成: {output_file.name} ({compressed_size_mb:.1f}MB)")
                 return True
             else:
                 # 64k压缩后仍>25MB，进行第二级48k压缩
-                print(f"⚠️  64k压缩后仍超25MB，进行第二级48k压缩...")
-                print("📊 第二级压缩: 16KHz 单声道, 48kbps MP3")
-                
                 cmd_48k = [
                     'ffmpeg',
                     '-i', str(input_file),
@@ -438,9 +608,6 @@ class TranscriptExtractor:
                     text=True,
                     check=True
                 )
-                
-                final_size_mb = self.get_file_size_mb(output_file)
-                print(f"✅ 48k压缩完成: {output_file.name} ({final_size_mb:.1f}MB)")
                 
                 # 清理临时文件
                 if temp_64k_file.exists():
@@ -464,9 +631,6 @@ class TranscriptExtractor:
     def transcribe_with_groq(self, audio_file: Path) -> dict:
         """Transcribe audio file using Groq API (copied from Apple section)"""
         try:
-            print(f"🚀 Groq API转录: {audio_file.name}")
-            print("🧠 使用模型: whisper-large-v3")
-            
             start_time = time.time()
             
             with open(audio_file, "rb") as file:
@@ -486,8 +650,6 @@ class TranscriptExtractor:
             file_size_mb = self.get_file_size_mb(audio_file)
             speed_ratio = file_size_mb / processing_time * 60 if processing_time > 0 else 0
             
-            print(f"✅ Groq转录完成! 用时: {processing_time:.1f}秒")
-            
             return {
                 'text': text,
                 'language': language,
@@ -503,8 +665,7 @@ class TranscriptExtractor:
     def transcribe_with_mlx(self, audio_file: Path) -> dict:
         """Transcribe audio file using MLX Whisper (copied from Apple section)"""
         try:
-            print(f"🎯 MLX Whisper转录: {audio_file.name}")
-            print("🧠 使用模型: mlx-community/whisper-medium")
+            print("💻 本地转录...")
             
             start_time = time.time()
             
@@ -519,8 +680,6 @@ class TranscriptExtractor:
             file_size_mb = self.get_file_size_mb(audio_file)
             speed_ratio = file_size_mb / processing_time * 60 if processing_time > 0 else 0
             
-            print(f"✅ MLX转录完成! 用时: {processing_time:.1f}秒")
-            
             return {
                 'text': result['text'],
                 'language': result.get('language', 'en'),
@@ -533,6 +692,128 @@ class TranscriptExtractor:
             print(f"❌ MLX转录失败: {e}")
             return None
     
+    def detect_chinese_content(self, text):
+        """
+        检测文本中中文字符的比例
+        
+        Args:
+            text: 要检测的文本
+            
+        Returns:
+            float: 中文字符比例（0.0 - 1.0）
+        """
+        if not text:
+            return 0.0
+        
+        # 尝试修复编码问题
+        try:
+            # 如果是乱码，尝试修复
+            if '\\' in text or 'è' in text or 'ä' in text:
+                try:
+                    # 尝试不同的编码修复
+                    fixed_text = text.encode('latin1').decode('utf-8')
+                    text = fixed_text
+                except:
+                    pass
+        except:
+            pass
+        
+        # 中文字符范围（包括中文标点符号）
+        import re
+        chinese_pattern = r'[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u3000-\u303f\uff00-\uffef]'
+        chinese_chars = len(re.findall(chinese_pattern, text))
+        total_chars = len(text.replace(' ', ''))  # 不计算空格
+        
+        if total_chars == 0:
+            return 0.0
+        
+        return chinese_chars / total_chars
+
+    def smart_language_selection(self, available_transcripts, video_title="", channel_name="", threshold=0.3):
+        """
+        智能选择转录语言
+        
+        Args:
+            available_transcripts: 可用转录列表
+            video_title: 视频标题
+            channel_name: 频道名称
+            threshold: 中文字符比例阈值
+            
+        Returns:
+            (选中的转录对象, 语言代码, 是否自动生成, 选择原因)
+        """
+        # 分析内容语言
+        combined_text = f"{video_title} {channel_name}"
+        chinese_ratio = self.detect_chinese_content(combined_text)
+        
+        # 分析可用的字幕语言
+        available_languages = set()
+        chinese_available = False
+        english_available = False
+        
+        for trans in available_transcripts:
+            lang = trans['language_code']
+            available_languages.add(lang)
+            if lang in ['zh', 'zh-CN', 'zh-TW', 'zh-Hans', 'zh-Hant']:
+                chinese_available = True
+            elif lang == 'en':
+                english_available = True
+        
+        # 智能决策逻辑（后台运行，不显示输出）
+        if chinese_ratio >= threshold:
+            # 检测到中文内容
+            if chinese_available:
+                target_languages = ['zh', 'zh-CN', 'zh-TW', 'zh-Hans', 'zh-Hant']
+                reason = f"检测到中文内容({chinese_ratio:.1%})，选择中文字幕"
+            else:
+                target_languages = ['en']
+                reason = f"检测到中文内容({chinese_ratio:.1%})，但无中文字幕，选择英文"
+        else:
+            # 未检测到中文内容
+            if chinese_available and not english_available:
+                target_languages = ['zh', 'zh-CN', 'zh-TW', 'zh-Hans', 'zh-Hant']
+                reason = f"虽然内容为非中文({chinese_ratio:.1%})，但只有中文字幕可用"
+            else:
+                target_languages = ['en']
+                reason = f"检测到非中文内容({chinese_ratio:.1%})，优先选择英文字幕"
+        
+        # 优先级：目标语言手动 > 目标语言自动 > 英文手动 > 英文自动 > 其他手动 > 其他自动
+        priorities = []
+        
+        # 添加目标语言优先级
+        for lang in target_languages:
+            priorities.append((lang, False))  # 手动字幕
+            priorities.append((lang, True))   # 自动字幕
+        
+        # 如果目标不是英文，添加英文备选
+        if 'en' not in target_languages:
+            priorities.append(('en', False))  # 英文手动
+            priorities.append(('en', True))   # 英文自动
+        
+        # 添加其他语言备选
+        priorities.append((None, False))  # 任何手动字幕
+        priorities.append((None, True))   # 任何自动字幕
+        
+        # 按优先级选择
+        for target_lang, target_generated in priorities:
+            for trans_info in available_transcripts:
+                lang_code = trans_info['language_code']
+                is_generated = trans_info['is_generated']
+                
+                if target_lang is None:  # 匹配任何语言
+                    if is_generated == target_generated:
+                        return trans_info['transcript'], lang_code, is_generated, f"备选: {lang_code}"
+                elif lang_code == target_lang and is_generated == target_generated:
+                    status = "自动" if is_generated else "手动"
+                    return trans_info['transcript'], lang_code, is_generated, f"最佳匹配: {lang_code}({status})"
+        
+        # 如果都没找到，返回第一个
+        if available_transcripts:
+            first = available_transcripts[0]
+            return first['transcript'], first['language_code'], first['is_generated'], "默认第一个"
+        
+        return None, None, None, "未找到可用字幕"
+
     def transcribe_audio_smart(self, audio_file: Path, title: str) -> Optional[str]:
         """Smart audio transcription: choose best method based on file size (copied and simplified from Apple section)"""
         if not (GROQ_AVAILABLE or MLX_WHISPER_AVAILABLE):
@@ -540,32 +821,24 @@ class TranscriptExtractor:
             return None
         
         try:
-            print(f"🎙️  开始转录: {title}")
-            
             # Check file size
             file_size_mb = self.get_file_size_mb(audio_file)
-            print(f"📊 音频文件大小: {file_size_mb:.1f}MB")
             
             groq_limit = 25  # MB
             transcript_result = None
             compressed_file = None
-            original_size = file_size_mb
-            final_size = file_size_mb
             
             # Smart transcription strategy
             if file_size_mb <= groq_limit and GROQ_AVAILABLE:
                 # Case 1: File < 25MB, use Groq directly with MLX fallback
-                print("✅ 文件大小在Groq限制内，使用超快转录")
                 transcript_result = self.transcribe_with_groq(audio_file)
                 
                 # Fallback to MLX if Groq fails
                 if not transcript_result and MLX_WHISPER_AVAILABLE:
-                    print("🔄 Groq转录失败，切换到MLX Whisper...")
                     transcript_result = self.transcribe_with_mlx(audio_file)
             
             elif file_size_mb > groq_limit:
                 # Case 2: File > 25MB, need compression
-                print("⚠️  文件超出Groq限制，开始压缩...")
                 
                 # 生成安全的压缩文件名
                 original_name = audio_file.stem
@@ -583,21 +856,16 @@ class TranscriptExtractor:
                 
                 if self.compress_audio_file(audio_file, compressed_file):
                     compressed_size = self.get_file_size_mb(compressed_file)
-                    final_size = compressed_size
-                    print(f"📊 压缩后大小: {compressed_size:.1f}MB")
                     
                     if compressed_size <= groq_limit and GROQ_AVAILABLE:
                         # Case 2a: After compression, within Groq limit with MLX fallback
-                        print("✅ 压缩后在Groq限制内，使用超快转录")
                         transcript_result = self.transcribe_with_groq(compressed_file)
                         
                         # Fallback to MLX if Groq fails
                         if not transcript_result and MLX_WHISPER_AVAILABLE:
-                            print("🔄 Groq转录失败，切换到MLX Whisper...")
                             transcript_result = self.transcribe_with_mlx(compressed_file)
                     else:
                         # Case 2b: Still over limit, use MLX
-                        print("⚠️  压缩后仍超出限制，使用MLX转录")
                         if MLX_WHISPER_AVAILABLE:
                             transcript_result = self.transcribe_with_mlx(compressed_file)
                         else:
@@ -605,7 +873,6 @@ class TranscriptExtractor:
                             return None
                 else:
                     # Compression failed, try MLX
-                    print("❌ 压缩失败，尝试本地MLX转录")
                     if MLX_WHISPER_AVAILABLE:
                         transcript_result = self.transcribe_with_mlx(audio_file)
                     else:
@@ -614,7 +881,6 @@ class TranscriptExtractor:
             
             else:
                 # Case 3: Groq not available, use MLX
-                print("⚠️  未检测到Groq API，使用本地MLX转录")
                 if MLX_WHISPER_AVAILABLE:
                     transcript_result = self.transcribe_with_mlx(audio_file)
                 else:
@@ -626,19 +892,17 @@ class TranscriptExtractor:
                 print("❌ 所有转录方式均失败")
                 return None
             
-            # Clean up files
+            # Clean up files silently
             try:
                 # Delete original audio file
                 audio_file.unlink()
-                print(f"🗑️  已删除音频文件: {audio_file.name}")
                 
                 # Delete compressed file (if exists)
                 if compressed_file and compressed_file.exists():
                     compressed_file.unlink()
-                    print(f"🗑️  已删除压缩文件: {compressed_file.name}")
                     
             except Exception as e:
-                print(f"⚠️  删除文件失败: {e}")
+                pass  # Silently ignore cleanup errors
             
             return transcript_result['text']
             
@@ -646,31 +910,26 @@ class TranscriptExtractor:
             print(f"❌ 转录流程失败: {e}")
             return None
     
-    def extract_youtube_transcript(self, video_id: str, video_url: str = None, title: str = "Unknown") -> Optional[str]:
+    def extract_youtube_transcript(self, video_id: str, video_url: str = None, title: str = "Unknown", episode_dir: Path = None) -> Optional[str]:
         """Extract transcript from YouTube video, with audio download fallback"""
         if not YOUTUBE_TRANSCRIPT_AVAILABLE:
-            print("YouTube转录API不可用，尝试音频下载备用方案...")
             if video_url and YT_DLP_AVAILABLE:
-                return self.audio_download_fallback(video_url, title)
+                return self.audio_download_fallback(video_url, title, episode_dir)
             return None
         
         try:
             # Clean the video ID - remove any extra characters
             clean_video_id = video_id.strip()
             if len(clean_video_id) != 11:
-                print(f"无效的视频ID长度: {len(clean_video_id)} (应为11位)")
                 if video_url and YT_DLP_AVAILABLE:
-                    return self.audio_download_fallback(video_url, title)
+                    return self.audio_download_fallback(video_url, title, episode_dir)
                 return None
             
-            print(f"🎯 优先使用YouTube转录API: {clean_video_id}")
-            
-            # Try multiple times in case of network issues
-            max_retries = 3
+            # Enhanced retry mechanism with smart language selection
+            max_retries = 20
             for attempt in range(max_retries):
                 try:
                     if attempt > 0:
-                        print(f"  重试第{attempt + 1}/{max_retries}次...")
                         import time
                         time.sleep(2)  # Wait 2 seconds between retries
                     
@@ -688,73 +947,33 @@ class TranscriptExtractor:
                         })
                     
                     if not available_transcripts:
-                        print(f"  第{attempt + 1}次尝试未找到可用转录")
                         continue
                     
-                    print(f"  找到 {len(available_transcripts)} 种转录语言:")
-                    for i, trans_info in enumerate(available_transcripts, 1):
-                        status = "自动生成" if trans_info['is_generated'] else "手动字幕"
-                        translatable = "可翻译" if trans_info['is_translatable'] else "不可翻译"
-                        print(f"    {i}. {trans_info['language_code']} - {trans_info['language_name']} ({status}, {translatable})")
+                    # Smart language selection - automatically choose best transcript
+                    selected_transcript, selected_lang, is_generated, reason = self.smart_language_selection(
+                        available_transcripts, title, ""
+                    )
                     
-                    # If only one transcript available, use it directly
-                    if len(available_transcripts) == 1:
-                        selected_transcript = available_transcripts[0]['transcript']
-                        print(f"  只有一种转录可用，自动选择: {available_transcripts[0]['language_code']}")
-                    else:
-                        # Multiple transcripts available, let user choose
-                        print(f"\n  检测到多种转录语言，请选择:")
-                        for i, trans_info in enumerate(available_transcripts, 1):
-                            status = "自动生成" if trans_info['is_generated'] else "手动字幕"
-                            print(f"    {i}. {trans_info['language_code']} - {trans_info['language_name']} ({status})")
-                        
-                        while True:
-                            try:
-                                choice = input(f"  请选择转录语言 (1-{len(available_transcripts)}), 或按回车使用第一个: ").strip()
-                                
-                                if not choice:
-                                    # Default to first option
-                                    selected_index = 0
-                                    print(f"  使用默认选择: {available_transcripts[0]['language_code']}")
-                                    break
-                                else:
-                                    selected_index = int(choice) - 1
-                                    if 0 <= selected_index < len(available_transcripts):
-                                        print(f"  已选择: {available_transcripts[selected_index]['language_code']} - {available_transcripts[selected_index]['language_name']}")
-                                        break
-                                    else:
-                                        print(f"  请输入 1 到 {len(available_transcripts)} 之间的数字")
-                                        continue
-                            except ValueError:
-                                print(f"  请输入有效的数字 (1-{len(available_transcripts)})")
-                                continue
-                        
-                        selected_transcript = available_transcripts[selected_index]['transcript']
+                    if not selected_transcript:
+                        continue
                     
                     # Fetch the selected transcript
                     try:
-                        print(f"  正在获取转录: {selected_transcript.language_code}")
                         transcript_data = selected_transcript.fetch()
                         
                         if not transcript_data:
-                            print(f"    {selected_transcript.language_code}未返回数据")
                             # If selected transcript fails, try others
-                            print("  尝试其他可用转录...")
                             for trans_info in available_transcripts:
                                 if trans_info['transcript'] == selected_transcript:
                                     continue
                                 try:
-                                    print(f"  备用转录: {trans_info['language_code']}")
                                     transcript_data = trans_info['transcript'].fetch()
                                     if transcript_data:
-                                        print(f"  备用转录成功: {trans_info['language_code']}")
                                         break
                                 except Exception as e:
-                                    print(f"    备用转录{trans_info['language_code']}失败: {e}")
                                     continue
                         
                         if not transcript_data:
-                            print(f"  第{attempt + 1}次尝试: 所有转录都失败")
                             continue
                         
                         # Extract text - handle different possible formats
@@ -769,74 +988,42 @@ class TranscriptExtractor:
                             elif hasattr(entry, '__dict__') and 'text' in entry.__dict__:
                                 # Object with text attribute
                                 text_parts.append(entry.__dict__['text'])
-                            else:
-                                print(f"    警告: 未知片段格式: {type(entry)}")
                         
                         if text_parts:
                             full_text = " ".join(text_parts).strip()
                             if full_text:
-                                print(f"✅ YouTube转录API成功! (共{len(full_text)}个字符)")
                                 return full_text
-                            else:
-                                print(f"    合并后为空")
-                        else:
-                            print(f"    未提取到文本")
                         
                     except Exception as e3:
-                        error_msg = str(e3)
-                        print(f"    获取选中转录失败: {error_msg}")
-                        
-                        # Check for specific error types
-                        if "no element found" in error_msg.lower():
-                            print(f"    这可能是XML解析错误，可能是临时问题")
-                        elif "not available" in error_msg.lower():
-                            print(f"    该转录不可用")
-                        else:
-                            print(f"    未知错误类型: {type(e3)}")
-                    
-                    # If we get here, selected transcript failed
-                    print(f"  第{attempt + 1}次尝试失败")
+                        pass
                     
                 except Exception as e2:
                     error_msg = str(e2)
-                    print(f"  第{attempt + 1}次获取转录列表失败: {error_msg}")
                     
                     # Check for specific error types
                     if "no element found" in error_msg.lower():
-                        print(f"    XML解析错误 - 可能是临时问题，重试中...")
                         continue
                     elif "not available" in error_msg.lower() or "disabled" in error_msg.lower():
-                        print(f"    视频转录被禁用或不可用")
                         break  # No point retrying
                     else:
-                        print(f"    未知错误: {type(e2)}")
-                        if attempt == max_retries - 1:  # Last attempt
-                            import traceback
-                            print(f"    完整错误信息:")
-                            traceback.print_exc()
                         continue
             
-            print("❌ YouTube转录API失败，尝试音频下载备用方案...")
             # Fallback to audio download if transcript extraction failed
             if video_url and YT_DLP_AVAILABLE:
-                return self.audio_download_fallback(video_url, title)
+                return self.audio_download_fallback(video_url, title, episode_dir)
             else:
-                print("❌ 音频下载备用方案不可用")
                 return None
             
         except Exception as e:
-            print(f"提取YouTube转录出错: {e}")
-            print("🔄 尝试音频下载备用方案...")
             if video_url and YT_DLP_AVAILABLE:
-                return self.audio_download_fallback(video_url, title)
+                return self.audio_download_fallback(video_url, title, episode_dir)
             return None
     
-    def audio_download_fallback(self, video_url: str, title: str) -> Optional[str]:
+    def audio_download_fallback(self, video_url: str, title: str, episode_dir: Path = None) -> Optional[str]:
         """Audio download and transcription fallback solution"""
-        print("🎵 开始音频下载备用方案...")
         
-        # Download audio
-        audio_file = self.download_youtube_audio(video_url, title)
+        # Download audio to episode directory
+        audio_file = self.download_youtube_audio(video_url, title, episode_dir)
         if not audio_file:
             return None
         
@@ -844,15 +1031,43 @@ class TranscriptExtractor:
         transcript_text = self.transcribe_audio_smart(audio_file, title)
         return transcript_text
     
-    def save_transcript(self, transcript: str, title: str) -> str:
-        """Save transcript to file"""
-        # Build path
-        safe_title = self.sanitize_filename(title)
-        transcript_path = self.output_dir / self.ensure_transcript_filename_length(safe_title)
+    def save_transcript(self, transcript: str, title: str, channel_name: str = None, published_date: str = None, episode_dir: Path = None) -> str:
+        """
+        保存转录到文件（支持新的目录结构）
+        
+        Args:
+            transcript: 转录内容
+            title: 视频标题
+            channel_name: 频道名称（用于新目录结构）
+            published_date: 发布日期（用于新目录结构）
+            episode_dir: 剧集目录（如果已创建）
+            
+        Returns:
+            str: 保存的文件路径
+        """
+        if episode_dir:
+            # 使用新的目录结构：episode_dir已经是完整路径
+            safe_channel = self.sanitize_filename(channel_name) if channel_name else ""
+            safe_title = self.sanitize_filename(title)
+            
+            # 生成文件名
+            if safe_channel:
+                content_part = f"{safe_channel}_{safe_title}"
+            else:
+                content_part = safe_title
+            
+            transcript_filename = self.ensure_output_filename_length("Transcript_", content_part, ".md")
+            transcript_path = episode_dir / transcript_filename
+        else:
+            # 兼容旧版本调用
+            safe_title = self.sanitize_filename(title)
+            transcript_path = self.output_dir / self.ensure_transcript_filename_length(safe_title)
         
         with open(transcript_path, 'w', encoding='utf-8') as f:
-            f.write(f"# Transcript: {title}\n\n")
-            f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            f.write(f"# 转录: {title}\n\n")
+            if channel_name:
+                f.write(f"**频道:** {channel_name}\n\n")
+            f.write(f"**生成时间:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
             f.write("---\n\n")
             f.write(transcript)
         
@@ -915,13 +1130,9 @@ class SummaryGenerator:
             try:
                 genai.configure(api_key=self.api_key)
                 self.gemini_client = genai
-                print("✅ Gemini API已成功初始化用于YouTube！")
             except Exception as e:
-                print(f"⚠️  初始化Gemini客户端出错: {e}")
                 self.gemini_client = None
         else:
-            if not self.api_key:
-                print("请将Gemini API密钥添加到.env文件中")
             self.gemini_client = None
     
     def generate_summary(self, transcript: str, title: str) -> Optional[str]:
@@ -949,7 +1160,6 @@ class SummaryGenerator:
             {transcript}
             """
             
-            print("正在生成摘要...")
             response = self.gemini_client.GenerativeModel("gemini-2.5-flash-preview-05-20").generate_content(prompt)
             
             # Handle the response properly
@@ -1014,12 +1224,46 @@ class SummaryGenerator:
             truncated_title = safe_title[:max_content_length]
             return f"{prefix}{truncated_title}{extension}"
     
-    def save_summary(self, summary: str, title: str, output_dir: Path) -> str:
-        """Save summary to file"""
-        # Sanitize filename
-        safe_title = self.sanitize_filename(title)
+    def save_summary(self, summary: str, title: str, output_dir: Path, channel_name: str = None, episode_dir: Path = None) -> str:
+        """
+        保存摘要到文件（支持新的目录结构）
         
-        summary_path = output_dir / self.ensure_summary_filename_length(safe_title)
+        Args:
+            summary: 摘要内容
+            title: 视频标题
+            output_dir: 输出目录（兼容性参数）
+            channel_name: 频道名称（用于新目录结构）
+            episode_dir: 剧集目录（如果已创建）
+            
+        Returns:
+            str: 保存的文件路径
+        """
+        if episode_dir:
+            # 使用新的目录结构：episode_dir已经是完整路径
+            safe_channel = self.sanitize_filename(channel_name) if channel_name else ""
+            safe_title = self.sanitize_filename(title)
+            
+            # 生成文件名
+            if safe_channel:
+                content_part = f"{safe_channel}_{safe_title}"
+            else:
+                content_part = safe_title
+            
+            # 确保文件名不超过限制
+            def ensure_length(prefix, content, extension, max_len=255):
+                fixed_len = len(prefix) + len(extension)
+                if len(content) + fixed_len <= max_len:
+                    return f"{prefix}{content}{extension}"
+                max_content = max_len - fixed_len
+                truncated = content[:max_content]
+                return f"{prefix}{truncated}{extension}"
+            
+            summary_filename = ensure_length("Summary_", content_part, ".md")
+            summary_path = episode_dir / summary_filename
+        else:
+            # 兼容旧版本调用
+            safe_title = self.sanitize_filename(title)
+            summary_path = output_dir / self.ensure_summary_filename_length(safe_title)
         
         with open(summary_path, 'w', encoding='utf-8') as f:
             f.write(f"# Summary: {title}\n\n")
@@ -1040,17 +1284,15 @@ class Podnet:
     
     def run(self):
         """Main application loop for YouTube"""
-        print("🎥 欢迎使用 Podnet - 您的 YouTube 播客助手工具！")
-        print("=" * 50)
         
         while True:
-            # First ask what type of information the user wants to provide
-            print("\n您感兴趣的信息类型是？")
-            print("- name: 播客/频道名称")
-            print("- link: YouTube 视频或频道链接") 
-            print("- script: 直接提供转录文本内容")
+            # 修改询问信息类型的提示
+            print("\n请选择youtube资源类型:")
+            print("- name: 频道名称(@name)")
+            print("- link: 视频链接")
+            print("- script: 直接提供文本内容")
             print("\n示例：")
-            print("  name: lex fridman, or lexfridman (频道的@username)")
+            print("  name: lex fridman, or lexfridman (频道的@name)")
             print("  link: https://www.youtube.com/watch?v=qCbfTN-caFI (单视频链接)")
             print("  script: 将文本内容放入 scripts/script.txt")
             
@@ -1107,9 +1349,9 @@ class Podnet:
                 
                 print(f"✅ 已收到脚本内容（{len(transcript)} 个字符）")
                 
-                # Skip to action selection
-                want_transcripts = True  # Always save transcript for script
-                want_summaries = True   # Always generate summary for script
+                # 自动设置为获取转录文本和摘要
+                want_transcripts = True
+                want_summaries = True
             
             else:
                 # Handle name/link input (existing logic)
@@ -1207,15 +1449,37 @@ class Podnet:
                     for i, episode in enumerate(episodes, 1):
                         print(f"{i}. 🎥 [YouTube] '{episode['title']}' - {episode['published_date']}")
                     
-                    # Get episode selection FIRST
-                    episode_selection = input(f"\n您对哪些节目感兴趣？(1-{len(episodes)}，如 '1,3,5' 或 'all'): ").strip()
+                    # Get episode selection
+                    episode_selection = input(f"\n您对哪些节目感兴趣？(1-{len(episodes)}，如 '1,3,5' 或 '1-3' 或 'all'): ").strip()
                     
                     if episode_selection.lower() == 'all':
                         selected_episodes = episodes
                     else:
                         try:
-                            selected_indices = [int(x.strip()) - 1 for x in episode_selection.split(',')]
-                            selected_episodes = [episodes[i] for i in selected_indices if 0 <= i < len(episodes)]
+                            selected_indices = []
+                            # Split by comma first
+                            parts = episode_selection.split(',')
+                            for part in parts:
+                                part = part.strip()
+                                if '-' in part:
+                                    # Handle range format like "1-3"
+                                    start, end = part.split('-', 1)
+                                    start_idx = int(start.strip()) - 1
+                                    end_idx = int(end.strip()) - 1
+                                    selected_indices.extend(range(start_idx, end_idx + 1))
+                                else:
+                                    # Handle single number
+                                    selected_indices.append(int(part) - 1)
+                            
+                            # Remove duplicates and filter valid indices
+                            selected_indices = list(set(selected_indices))
+                            valid_indices = [i for i in selected_indices if 0 <= i < len(episodes)]
+                            
+                            # If no valid indices after filtering, raise error
+                            if not valid_indices:
+                                raise ValueError("No valid episode indices")
+                            
+                            selected_episodes = [episodes[i] for i in sorted(valid_indices)]
                         except (ValueError, IndexError):
                             print("节目选择无效，请重试。")
                             continue
@@ -1226,55 +1490,60 @@ class Podnet:
                     
                     print(f"\n✅ 已选择 {len(selected_episodes)} 期节目")
                 
-                # THEN ask what to do with selected episodes (only for name/link)
-                print("\n您希望对所选节目进行什么操作？")
-                print("1. 获取节目的转录文本")
-                print("2. 获取节目的摘要")
-                print("3. 获取转录文本和摘要")
-                
-                action = input("请选择 (1, 2, 或 3): ").strip()
-                
-                if action not in ['1', '2', '3']:
-                    print("请选择有效的选项 (1, 2, 或 3)")
-                    continue
-                
-                # Parse action
-                want_transcripts = action in ['1', '3']
-                want_summaries = action in ['2', '3']
+                # 自动设置为获取转录文本和摘要
+                want_transcripts = True
+                want_summaries = True
             
-            # Ask for language preference (common for all types)
-            language = input("\n您希望输出什么语言？(en/ch): ").strip().lower()
-            want_chinese = language == 'ch'
+            # 中文版默认使用中文输出和翻译
+            want_chinese = True
             
-            # Process selected episodes
-            print(f"\n🚀 正在处理 {len(selected_episodes)} 期节目 ...")
-            
+            # 处理每个节目
             for episode in selected_episodes:
-                print(f"\n📝 正在处理 {f'📜 [脚本]' if episode['platform'] == 'script' else '🎥 [YouTube]'}: {episode['title']}")
+                print(f"\n🎥 正在处理: {episode['title']}")
+                print()  # 空行
                 
                 transcript_content = None
+                episode_dir = None
                 
                 if episode['platform'] == 'script':
                     # Use the script content directly
                     transcript_content = transcript
-                    print("✅ 脚本内容加载成功！")
+                    print("⚡️ 极速转录...")
+                    print("✅ 转录完成")
+                    print()  # 空行
                 else:
                     # Extract transcript from YouTube (existing logic)
                     video_id = episode.get('video_id')
                     if video_id:
+                        # Get detailed video info to create episode directory
+                        video_info = self.searcher.get_video_info(video_id)
+                        channel_name = video_info.get('channel_name', 'Unknown_Channel')
+                        
+                        # Use the published_date from search results first, fallback to video info
+                        published_date = episode.get('published_date', 'Unknown')
+                        if published_date in ['Unknown', 'Recent']:
+                            published_date = video_info.get('published_date', 'Recent')
+                        
+                        # Create episode directory using Apple Podcast style
+                        episode_dir = self.extractor.create_episode_folder(
+                            channel_name, 
+                            episode['title'], 
+                            published_date
+                        )
+                        
+                        print("⚡️ 极速转录...")
                         transcript_content = self.extractor.extract_youtube_transcript(
                             video_id, 
                             episode.get('url'), 
-                            episode['title']
+                            episode['title'],
+                            episode_dir
                         )
                         if transcript_content:
-                            print("✅ 成功提取 YouTube 转录文本！")
+                            print("✅ 转录完成")
+                            print()  # 空行
                     
                     # If no transcript available, create placeholder
                     if not transcript_content and (want_transcripts or want_summaries):
-                        print("⚠️  此视频没有可用的 YouTube 转录文本")
-                        print("   该视频可能没有自动生成的字幕")
-                        # Create a placeholder transcript for YouTube videos without captions
                         transcript_content = f"""# {episode['title']}
 
 Published: {episode['published_date']}
@@ -1291,7 +1560,8 @@ You can:
 2. Check if captions are available manually on YouTube
 3. Request the creator to add captions
 """
-                        print("✅ 已创建节目信息（无转录文本）")
+                        print("✅ 转录完成")
+                        print()  # 空行
                 
                 if not transcript_content:
                     print("❌ 无法提取该节目的转录文本")
@@ -1299,40 +1569,68 @@ You can:
                 
                 # Save transcript if requested
                 if want_transcripts and transcript_content:
-                    transcript_path = self.extractor.save_transcript(transcript_content, episode['title'])
-                    print(f"💾 转录文本已保存至: {transcript_path}")
+                    if episode['platform'] == 'script':
+                        # For script content, use default save method
+                        transcript_path = self.extractor.save_transcript(transcript_content, episode['title'])
+                    else:
+                        # For YouTube content, use new directory structure
+                        video_info = self.searcher.get_video_info(episode.get('video_id', ''))
+                        channel_name = video_info.get('channel_name', 'Unknown_Channel')
+                        
+                        # Use published_date from search results first
+                        published_date = episode.get('published_date', 'Unknown')
+                        if published_date in ['Unknown', 'Recent']:
+                            published_date = video_info.get('published_date', 'Recent')
+                        
+                        transcript_path = self.extractor.save_transcript(
+                            transcript_content, 
+                            episode['title'], 
+                            channel_name, 
+                            published_date, 
+                            episode_dir
+                        )
                 
                 # Generate and save summary if requested
                 if want_summaries and transcript_content:
                     # Check if transcript has actual content (not just placeholder)
                     if len(transcript_content.strip()) > 100 and "Note: No transcript available" not in transcript_content:
+                        print("🧠 开始总结...")
                         summary = self.summarizer.generate_summary(transcript_content, episode['title'])
                         if summary:
                             # Translate summary to Chinese if requested
                             final_summary = summary
                             if want_chinese:
-                                print("🔄 正在将摘要翻译为中文 ...")
                                 translated_summary = self.summarizer.translate_to_chinese(summary)
                                 if translated_summary:
                                     final_summary = translated_summary
-                                    print("✅ 摘要已翻译为中文！")
                                 else:
                                     print("⚠️  翻译失败，使用原始摘要")
                             
-                            summary_path = self.summarizer.save_summary(
-                                final_summary, 
-                                episode['title'], 
-                                self.extractor.output_dir
-                            )
-                            print(f"📄 摘要已保存至: {summary_path}")
+                            if episode['platform'] == 'script':
+                                # For script content, use default save method
+                                summary_path = self.summarizer.save_summary(
+                                    final_summary, 
+                                    episode['title'], 
+                                    self.extractor.output_dir
+                                )
+                            else:
+                                # For YouTube content, use new directory structure
+                                video_info = self.searcher.get_video_info(episode.get('video_id', ''))
+                                channel_name = video_info.get('channel_name', 'Unknown_Channel')
+                                
+                                summary_path = self.summarizer.save_summary(
+                                    final_summary, 
+                                    episode['title'], 
+                                    self.extractor.output_dir,
+                                    channel_name,
+                                    episode_dir
+                                )
+                            print("✅ 总结完成")
+                            print()  # 空行
                         else:
                             print("❌ 无法生成摘要")
                     else:
                         print("⚠️  跳过摘要 - 无有效转录内容")
-                
-                print("✅ 节目处理完成！")
-            
-            print(f"\n🎉 全部完成！文件已保存至: {self.extractor.output_dir}")
             
             # Ask about visualization if any content was processed
             if selected_episodes:
@@ -1355,19 +1653,14 @@ You can:
         if not processed_episodes:
             return
         
-        print(f"\n🎨 可视化故事生成:")
-        visualize_choice = input("生成可视化故事? (y/n): ").strip().lower()
+        print(f"\n🎨 可视化故事生成?(y/n):")
+        visualize_choice = input().strip().lower()
         
         if visualize_choice not in ['y', 'yes', '是']:
             return
         
-        # Ask whether to use transcript or summary
-        print("📄 内容来源:")
-        content_choice = input("基于转录文本还是摘要生成可视化? (t/s): ").strip().lower()
-        
-        if content_choice not in ['t', 's']:
-            print("选择无效，跳过可视化生成。")
-            return
+        # 自动选择基于摘要生成
+        content_choice = 's'
         
         # Import visual module based on language
         try:
@@ -1383,44 +1676,79 @@ You can:
         # Process each episode
         visual_success_count = 0
         
+        print("\n🎨 添加色彩...")
+        
         for i, episode in enumerate(processed_episodes, 1):
             if episode['platform'] == 'script':
                 title = episode['title']
             else:
                 title = episode['title']
             
-            print(f"\n[{i}/{len(processed_episodes)}] 正在生成可视化故事: {title}")
-            
-            # Build file paths - using the same naming pattern as save functions
-            # Use the same sanitization logic as save_transcript and save_summary
-            safe_title = re.sub(r'[^\w\s-]', '', title).strip()
-            safe_title = re.sub(r'[-\s]+', '-', safe_title)
-            
-            if content_choice == 't':
-                # Use transcript
-                source_filename = self.extractor.ensure_transcript_filename_length(safe_title)
-                content_type = "转录文本"
+            # For YouTube episodes, find the correct file in new directory structure
+            if episode['platform'] == 'youtube':
+                # Get episode directory path
+                video_info = self.searcher.get_video_info(episode.get('video_id', ''))
+                channel_name = video_info.get('channel_name', 'Unknown_Channel')
+                published_date = episode.get('published_date', 'Recent')
+                
+                # Create episode directory path (same logic as in run method)
+                episode_dir = self.extractor.create_episode_folder(
+                    channel_name, 
+                    episode['title'], 
+                    published_date
+                )
+                
+                # Use the same filename generation logic as save_transcript and save_summary
+                safe_channel = self.extractor.sanitize_filename(channel_name) if channel_name else ""
+                safe_title = self.extractor.sanitize_filename(episode['title'])
+                
+                # Generate content part (same logic as in save functions)
+                if safe_channel:
+                    content_part = f"{safe_channel}_{safe_title}"
+                else:
+                    content_part = safe_title
+                
+                if content_choice == 't':
+                    # Use transcript - generate filename same as save_transcript
+                    source_filename = self.extractor.ensure_output_filename_length("Transcript_", content_part, ".md")
+                    content_type = "转录文本"
+                else:
+                    # Use summary - generate filename same as save_summary
+                    def ensure_length(prefix, content, extension, max_len=255):
+                        fixed_len = len(prefix) + len(extension)
+                        if len(content) + fixed_len <= max_len:
+                            return f"{prefix}{content}{extension}"
+                        max_content = max_len - fixed_len
+                        truncated = content[:max_content]
+                        return f"{prefix}{truncated}{extension}"
+                    
+                    source_filename = ensure_length("Summary_", content_part, ".md")
+                    content_type = "摘要"
+                
+                source_filepath = episode_dir / source_filename
             else:
-                # Use summary
-                source_filename = self.extractor.ensure_summary_filename_length(safe_title)
-                content_type = "摘要"
-            
-            source_filepath = self.extractor.output_dir / source_filename
+                # For other platforms, use the old logic
+                safe_title = re.sub(r'[^\w\s-]', '', title).strip()
+                safe_title = re.sub(r'[-\s]+', '-', safe_title)
+                
+                if content_choice == 't':
+                    source_filename = self.extractor.ensure_transcript_filename_length(safe_title)
+                    content_type = "转录文本"
+                else:
+                    source_filename = self.extractor.ensure_summary_filename_length(safe_title)
+                    content_type = "摘要"
+                
+                source_filepath = self.extractor.output_dir / source_filename
             
             if not source_filepath.exists():
-                print(f"❌ {content_type}文件未找到: {source_filename}")
                 continue
             
             # Generate visual story
             if generate_visual_story(str(source_filepath)):
                 visual_success_count += 1
-                print(f"✅ 可视化故事生成成功!")
-            else:
-                print(f"❌ 可视化故事生成失败")
         
-        print(f"\n📊 可视化故事生成完成! 成功: {visual_success_count}/{len(processed_episodes)}")
         if visual_success_count > 0:
-            print(f"📁 可视化故事保存在: {self.extractor.output_dir.absolute()}")
+            print("✅ 可视化完成")
 
 
 def main():
@@ -1509,5 +1837,4 @@ def apple_main():
         if continue_search not in ['y', 'yes']:
             print("🔙 返回主菜单")
             break
-
 

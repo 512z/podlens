@@ -54,17 +54,22 @@ def get_english_version():
     }
 
 # 自动化接口导入 / Automation interface imports
-from .automation import (
-    PodlensAutomation,
-    process_apple_podcast_auto,
-    process_youtube_auto
+from .auto_ch import (
+    AutoEngine as AutomationEngine_CH,
+    start_automation as start_automation_ch,
+    show_status as show_automation_status_ch
 )
 
-# 后台服务导入 / Background service imports
-from .background import (
-    BackgroundService,
-    PodcastListManager
+from .auto_en import (
+    AutoEngine as AutomationEngine_EN,
+    start_automation as start_automation_en,
+    show_status as show_automation_status_en
 )
+
+# 默认导出中文版（向后兼容）/ Default export Chinese version (backward compatible)
+AutomationEngine = AutomationEngine_CH
+start_automation = start_automation_ch
+show_automation_status = show_automation_status_ch
 
 # 公开的API / Public API
 __all__ = [
@@ -94,11 +99,15 @@ __all__ = [
     'get_english_version',
     
     # 自动化接口 / Automation interface
-    'PodlensAutomation',
-    'process_apple_podcast_auto',
-    'process_youtube_auto',
+    'AutomationEngine_CH',
+    'AutomationEngine_EN', 
+    'start_automation_ch',
+    'start_automation_en',
+    'show_automation_status_ch',
+    'show_automation_status_en',
     
-    # 后台服务 / Background service
-    'BackgroundService',
-    'PodcastListManager'
+    # 默认导出（向后兼容）/ Default exports (backward compatible)
+    'AutomationEngine',
+    'start_automation',
+    'show_automation_status'
 ] 

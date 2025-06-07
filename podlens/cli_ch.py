@@ -74,37 +74,30 @@ def show_status():
 
 def main():
     """主函数"""
-    # 添加命令行参数支持--background
+    # 检查是否通过autopod命令调用
+    if 'autopod' in sys.argv[0]:
+        from .auto_ch import start_automation
+        start_automation()
+        return
+    
+    # 添加命令行参数支持--auto和--status
     parser = argparse.ArgumentParser(description="PodLens - 智能播客转录与摘要工具", add_help=False)
-    parser.add_argument("--background", action="store_true", help="启动后台服务模式")
-    parser.add_argument("--action", choices=["start", "status", "list", "add", "remove"], default="start", help="后台服务操作")
-    parser.add_argument("--podcast", help="播客名称 (用于添加/删除操作)")
+    parser.add_argument("--auto", action="store_true", help="启动24x7自动化服务")
+    parser.add_argument("--status", action="store_true", help="显示自动化服务状态")
     
     # 解析已知参数，忽略其他参数以保持兼容性
     args, unknown = parser.parse_known_args()
     
-    # 如果是后台模式，启动后台服务
-    if args.background:
-        from .background import BackgroundService
-        print("🚀 启动 PodLens 后台服务...")
-        service = BackgroundService(language="ch")
-        
-        if args.action == "start":
-            service.start_background_service()
-        elif args.action == "status":
-            service.show_status()
-        elif args.action == "list":
-            service.list_manager.list_podcasts()
-        elif args.action == "add":
-            if args.podcast:
-                service.list_manager.add_podcast(args.podcast)
-            else:
-                print("❌ 请指定播客名称: --podcast '播客名称'")
-        elif args.action == "remove":
-            if args.podcast:
-                service.list_manager.remove_podcast(args.podcast)
-            else:
-                print("❌ 请指定播客名称: --podcast '播客名称'")
+    # 如果是自动化模式，启动自动化服务
+    if args.auto:
+        from .auto_ch import start_automation
+        start_automation()
+        return
+    
+    # 如果是状态查看模式
+    if args.status:
+        from .auto_ch import show_status as show_auto_status
+        show_auto_status()
         return
     
     # 原有的交互模式保持不变
