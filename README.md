@@ -84,6 +84,12 @@ autopod --status      # Chinese version
 ```
 
 ### Configuration Files (Auto-Generated)
+
+- `my_pod.md` - Configure monitored podcasts (created automatically)
+- `my_tube.md` - Configure monitored YouTube channels (created automatically)
+- `.podlens/setting` - Automation frequency and monitoring settings (created automatically)
+- `.podlens/status.json` - Service status and processed episodes tracking (created automatically)
+
 When you first run the automation service, PodLens will automatically create configuration files:
 
 **`my_pod.md`** (auto-generated with examples):
@@ -156,28 +162,42 @@ Please enter the podcast channel name: thoughts on the market
 🎨 Visual Story Generation?(y/n): 
 ```
 
-## 🎯 Available Commands
+### Automation Service Example
+```bash
+# Start the automation service
+$ autopodlens
+🤖 Starting PodLens 24x7 Intelligent Automation Service
 
-### Interactive Commands
-| Command | Description |
-|---------|-------------|
-| `podlens` | English version interactive interface |
-| `pod` | Chinese version interactive interface |
+⏰ Running frequency: hourly
+🎧 Monitoring podcasts: 1
+📺 Monitoring YouTube channels: 1
+Press Ctrl+Z to stop service
 
-### Automation Service Commands
-| Command | Description |
-|---------|-------------|
-| `autopodlens` | English version 24x7 automation service (hourly auto-processing) |
-| `autopod` | Chinese version 24x7 automation service (hourly auto-processing) |
-| `autopodlens --status` | Check English version automation service status |
-| `autopod --status` | Check Chinese version automation service status |
+⏰ Starting hourly check
+🔍 Checking podcast: thoughts on the market
+📥 Processing new episode: Standing by Our Outlook...
+✅ thoughts on the market processing complete
+🔍 Checking YouTube channel: @Bloomberg_Live
+📥 Processing new video: Jennifer Doudna on Future of Gene Editing \u0026 I...
+✅ @Bloomberg_Live processing complete
+✅ Check complete - Podcasts: 1/1, YouTube: 1/1
+```
 
-**Configuration Files (Auto-Generated):**
-- `my_pod.md` - Configure monitored podcasts (created automatically)
-- `my_tube.md` - Configure monitored YouTube channels (created automatically)
-- `.podlens/setting` - Automation frequency and monitoring settings (created automatically)
-- `.podlens/status.json` - Service status and processed episodes tracking (created automatically)
+### Service Status Monitoring
+```bash
+# Check automation service status
+$ autopodlens --status
+📊 PodLens Intelligent Automation Service Status:
+  Running frequency: 1.0 hours
+  Monitor podcasts: Enabled
+  Monitor YouTube: Enabled
 
+📻 Monitoring 1 podcasts:
+  - thoughts on the market
+
+📺 Monitoring 1 YouTube channels:
+  - @Bloomberg_Live
+```
 
 ## 📋 Workflow Example
 
@@ -238,43 +258,6 @@ your-project/
 - **Channel Format**: YouTube channels use simple names (e.g., `Bloomberg_Live` for `@Bloomberg_Live`)
 - **Episode Organization**: Date-based folder structure with detailed file naming for easy navigation
 - **Status Tracking**: View service status and processing history with `--status` flag
-
-### Automation Service Example
-```bash
-# Start the automation service
-$ autopodlens
-🤖 Starting PodLens 24x7 Intelligent Automation Service
-
-⏰ Running frequency: hourly
-🎧 Monitoring podcasts: 1
-📺 Monitoring YouTube channels: 1
-Press Ctrl+Z to stop service
-
-⏰ Starting hourly check
-🔍 Checking podcast: thoughts on the market
-📥 Processing new episode: Standing by Our Outlook...
-✅ thoughts on the market processing complete
-🔍 Checking YouTube channel: @Bloomberg_Live
-📥 Processing new video: Jennifer Doudna on Future of Gene Editing \u0026 I...
-✅ @Bloomberg_Live processing complete
-✅ Check complete - Podcasts: 1/1, YouTube: 1/1
-```
-
-### Service Status Monitoring
-```bash
-# Check automation service status
-$ autopodlens --status
-📊 PodLens Intelligent Automation Service Status:
-  Running frequency: 1.0 hours
-  Monitor podcasts: Enabled
-  Monitor YouTube: Enabled
-
-📻 Monitoring 1 podcasts:
-  - thoughts on the market
-
-📺 Monitoring 1 YouTube channels:
-  - @Bloomberg_Live
-```
 
 ### Smart Transcription Logic
 - **Small files (<25MB)**: Groq API ultra-fast transcription
