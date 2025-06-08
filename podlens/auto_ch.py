@@ -599,6 +599,35 @@ def main():
             print("ℹ️  未指定通知时间，使用默认时间: 08:00, 18:00")
         
         setup_email_service(user_email, notification_times)
+    elif args.time and not args.email:
+        # 单独更新时间
+        notification_times = []
+        time_parts = args.time.split(',')
+        for time_part in time_parts:
+            time_part = time_part.strip()
+            if ':' in time_part:
+                notification_times.append(time_part)
+            else:
+                print(f"⚠️  时间格式错误: {time_part}，应为 HH:MM 格式")
+        
+        if not notification_times:
+            print("❌ 未提供有效的时间格式")
+            return
+        
+        # 读取现有邮件配置
+        current_settings = email_service.load_email_settings()
+        
+        if not current_settings['email_function'] or not current_settings['user_email']:
+            print("❌ 请先使用 --email 参数设置邮箱地址")
+            print("💡 例如: autopod --email your@email.com --time 01:50")
+            return
+        
+        # 使用现有邮箱和新时间重新设置
+        print(f"🔄 更新邮件通知时间...")
+        print(f"   邮箱: {current_settings['user_email']}")
+        print(f"   新时间: {', '.join(notification_times)}")
+        
+        setup_email_service(current_settings['user_email'], notification_times)
     elif args.email_sync:
         sync_email_config()
     elif args.email_status:

@@ -87,6 +87,9 @@ autopod --status      # Chinese version
 # Email notification setup
 autopod(or autopodlens) --email your@email.com --time 08:00,18:00
 
+# Email time setup
+autopod(or autopodlens) --time 08:00,18:00
+
 # Check email service status  
 autopod(or autopodlens) --email-status
 

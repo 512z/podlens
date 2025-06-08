@@ -89,6 +89,9 @@ autopod --status      # 中文版
 # 邮件通知设置
 autopod --email your@email.com --time 08:00,18:00
 
+# 邮件时间设置
+autopod(or autopodlens) --time 08:00,18:00
+
 # 检查邮件服务状态  
 autopod --email-status
 

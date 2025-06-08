@@ -592,6 +592,35 @@ def main():
             print("ℹ️  No notification times specified, using defaults: 08:00, 18:00")
         
         setup_email_service(user_email, notification_times)
+    elif args.time and not args.email:
+        # Update time only
+        notification_times = []
+        time_parts = args.time.split(',')
+        for time_part in time_parts:
+            time_part = time_part.strip()
+            if ':' in time_part:
+                notification_times.append(time_part)
+            else:
+                print(f"⚠️  Invalid time format: {time_part}, should be HH:MM format")
+        
+        if not notification_times:
+            print("❌ No valid time format provided")
+            return
+        
+        # Read existing email configuration
+        current_settings = email_service.load_email_settings()
+        
+        if not current_settings['email_function'] or not current_settings['user_email']:
+            print("❌ Please set email address first using --email parameter")
+            print("💡 Example: autopodlens --email your@email.com --time 01:50")
+            return
+        
+        # Reconfigure with existing email and new time
+        print(f"🔄 Updating email notification times...")
+        print(f"   Email: {current_settings['user_email']}")
+        print(f"   New times: {', '.join(notification_times)}")
+        
+        setup_email_service(current_settings['user_email'], notification_times)
     elif args.email_sync:
         sync_email_config()
     elif args.email_status:
