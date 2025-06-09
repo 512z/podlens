@@ -1448,43 +1448,51 @@ class ApplePodcastExplorer:
                 return False, ""
             
             # 获取最新剧集（静默）
-            episodes = self.get_recent_episodes(selected_channel['feed_url'], 1, quiet=True)
+            episodes = self.get_recent_episodes(selected_channel['feed_url'], 5, quiet=True)
             if not episodes:
                 return False, ""
             
-            episode = episodes[0]
-            episode_title = episode['title']
+            # 循环处理所有episodes，从最新开始
+            processed_count = 0
+            last_episode_title = ""
             
-            # 检查是否已处理过
-            if progress_tracker and progress_tracker.is_episode_processed(podcast_name, episode_title):
-                print(f"⏭️  {podcast_name} 最新剧集已处理过，跳过")
-                return True, episode_title
+            for i, episode in enumerate(episodes):
+                episode_title = episode['title']
+                last_episode_title = episode_title
                 
-            print(f"📥 处理新剧集: {episode_title[:50]}...")
+                # 检查是否已处理过
+                if progress_tracker and progress_tracker.is_episode_processed(podcast_name, episode_title):
+                    # print(f"⏭️  {podcast_name} 剧集已处理过，跳过: {episode_title[:50]}...")
+                    continue
+                    
+                print(f"📥 处理新剧集: {episode_title[:50]}...")
+                
+                # 下载处理（静默下载过程）
+                success, episode_dir = self.download_episode(episode, i+1, selected_channel['name'], quiet=True)
+                if not success or not episode_dir:
+                    continue
+                
+                # 自动转录
+                audio_filepath = episode_dir / "audio.mp3"
+                if audio_filepath.exists():
+                    transcribe_success = self.transcribe_audio_smart(
+                        audio_filepath, episode_title, 
+                        selected_channel['name'], episode_dir, auto_transcribe=True
+                    )
+                    if transcribe_success:
+                        # 自动总结 - 模拟transcribe_downloaded_files的处理逻辑
+                        if self.gemini_client:
+                            # 使用与原始代码相同的summary生成逻辑
+                            self.auto_generate_summary_for_episode(
+                                episode_title, selected_channel['name'], episode_dir
+                            )
+                        
+                        # 标记为已处理
+                        if progress_tracker:
+                            progress_tracker.mark_episode_processed(podcast_name, episode_title)
+                        processed_count += 1
             
-            # 下载处理（静默下载过程）
-            success, episode_dir = self.download_episode(episode, 1, selected_channel['name'], quiet=True)
-            if not success or not episode_dir:
-                return False, episode_title
-            
-            # 自动转录
-            audio_filepath = episode_dir / "audio.mp3"
-            if audio_filepath.exists():
-                transcribe_success = self.transcribe_audio_smart(
-                    audio_filepath, episode_title, 
-                    selected_channel['name'], episode_dir, auto_transcribe=True
-                )
-                if transcribe_success:
-                    # 自动总结 - 模拟transcribe_downloaded_files的处理逻辑
-                    if self.gemini_client:
-                        # 使用与原始代码相同的summary生成逻辑
-                        summary_success = self.auto_generate_summary_for_episode(
-                            episode_title, selected_channel['name'], episode_dir
-                        )
-                        return summary_success, episode_title
-                    return True, episode_title
-            
-            return False, episode_title
+            return processed_count > 0, last_episode_title
             
         except Exception as e:
             return False, ""
@@ -1582,81 +1590,90 @@ class Podnet:
         """
         try:
             # 搜索频道最新视频
-            episodes = self.searcher.search_youtube_podcast(channel_name, num_episodes=1)
+            episodes = self.searcher.search_youtube_podcast(channel_name, num_episodes=10)
             if not episodes:
                 return False, ""
             
-            episode = episodes[0]
-            video_title = episode.get('title', 'Unknown')
+            # 循环处理所有videos，从最新开始
+            processed_count = 0
+            last_video_title = ""
             
-            # 检查是否已处理过
-            if progress_tracker and progress_tracker.is_video_processed(channel_name, video_title):
-                print(f"⏭️  @{channel_name} 最新视频已处理过，跳过")
-                return True, video_title
-            video_url = episode.get('url', '')
-            if not video_url:
-                return False, ""
-            
-            # 提取视频ID
-            import re
-            video_id_match = re.search(r'(?:v=|/)([a-zA-Z0-9_-]{11})', video_url)
-            if not video_id_match:
-                return False, ""
-            
-            video_id = video_id_match.group(1)
-            
-            # 获取视频信息
-            video_info = self.searcher.get_video_info(video_id)
-            title = episode.get('title', video_info.get('title', 'Unknown'))
-            channel_name_from_video = video_info.get('channel_name', channel_name)
-            published_date = episode.get('published_date', 'Recent')
-            
-            print(f"📥 处理新视频: {title[:50]}...")
-            
-            # 创建episode目录
-            episode_dir = self.extractor.create_episode_folder(
-                channel_name_from_video, 
-                title, 
-                published_date
-            )
-            
-            # 尝试提取转录
-            transcript = self.extractor.extract_youtube_transcript(
-                video_id, 
-                video_url, 
-                title, 
-                episode_dir=episode_dir
-            )
-            
-            if transcript:
-                # 保存转录
-                transcript_filename = self.extractor.save_transcript(
-                    transcript, 
-                    title, 
+            for episode in episodes:
+                video_title = episode.get('title', 'Unknown')
+                last_video_title = video_title
+                
+                # 检查是否已处理过
+                if progress_tracker and progress_tracker.is_video_processed(channel_name, video_title):
+                    # print(f"⏭️  @{channel_name} 视频已处理过，跳过: {video_title[:50]}...")
+                    continue
+                    
+                video_url = episode.get('url', '')
+                if not video_url:
+                    continue
+                
+                # 提取视频ID
+                import re
+                video_id_match = re.search(r'(?:v=|/)([a-zA-Z0-9_-]{11})', video_url)
+                if not video_id_match:
+                    continue
+                
+                video_id = video_id_match.group(1)
+                
+                # 获取视频信息
+                video_info = self.searcher.get_video_info(video_id)
+                title = episode.get('title', video_info.get('title', 'Unknown'))
+                channel_name_from_video = video_info.get('channel_name', channel_name)
+                published_date = episode.get('published_date', 'Recent')
+                
+                print(f"📥 处理新视频: {title[:50]}...")
+                
+                # 创建episode目录
+                episode_dir = self.extractor.create_episode_folder(
                     channel_name_from_video, 
-                    published_date, 
-                    episode_dir
+                    title, 
+                    published_date
                 )
                 
-                # 生成总结
-                if self.summarizer.gemini_client:
-                    summary = self.summarizer.generate_summary(transcript, title)
-                    if summary:
-                        # 翻译总结为中文（自动化中文版）
-                        chinese_summary = self.summarizer.translate_to_chinese(summary)
-                        final_summary = chinese_summary if chinese_summary else summary
-                        
-                        self.summarizer.save_summary(
-                            final_summary, 
-                            title, 
-                            episode_dir, 
-                            channel_name_from_video, 
-                            episode_dir
-                        )
+                # 尝试提取转录
+                transcript = self.extractor.extract_youtube_transcript(
+                    video_id, 
+                    video_url, 
+                    title, 
+                    episode_dir=episode_dir
+                )
                 
-                return True, title
+                if transcript:
+                    # 保存转录
+                    transcript_filename = self.extractor.save_transcript(
+                        transcript, 
+                        title, 
+                        channel_name_from_video, 
+                        published_date, 
+                        episode_dir
+                    )
+                    
+                    # 生成总结
+                    if self.summarizer.gemini_client:
+                        summary = self.summarizer.generate_summary(transcript, title)
+                        if summary:
+                            # 翻译总结为中文（自动化中文版）
+                            chinese_summary = self.summarizer.translate_to_chinese(summary)
+                            final_summary = chinese_summary if chinese_summary else summary
+                            
+                            self.summarizer.save_summary(
+                                final_summary, 
+                                title, 
+                                episode_dir, 
+                                channel_name_from_video, 
+                                episode_dir
+                            )
+                    
+                    # 标记为已处理
+                    if progress_tracker:
+                        progress_tracker.mark_video_processed(channel_name, video_title)
+                    processed_count += 1
             
-            return False, title
+            return processed_count > 0, last_video_title
             
         except Exception as e:
             print(f"❌ 自动处理YouTube视频失败: {e}")

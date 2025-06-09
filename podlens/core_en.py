@@ -1434,43 +1434,51 @@ class ApplePodcastExplorer:
                 return False, ""
             
             # Get latest episode (silent)
-            episodes = self.get_recent_episodes(selected_channel['feed_url'], 1, quiet=True)
+            episodes = self.get_recent_episodes(selected_channel['feed_url'], 5, quiet=True)
             if not episodes:
                 return False, ""
             
-            episode = episodes[0]
-            episode_title = episode['title']
+            # Process all episodes in a loop, starting from newest
+            processed_count = 0
+            last_episode_title = ""
             
-            # Check if already processed
-            if progress_tracker and progress_tracker.is_episode_processed(podcast_name, episode_title):
-                print(f"⏭️  {podcast_name} latest episode already processed, skipping")
-                return True, episode_title
+            for i, episode in enumerate(episodes):
+                episode_title = episode['title']
+                last_episode_title = episode_title
                 
-            print(f"📥 Processing new episode: {episode_title[:50]}...")
+                # Check if already processed
+                if progress_tracker and progress_tracker.is_episode_processed(podcast_name, episode_title):
+                    # print(f"⏭️  {podcast_name} episode already processed, skipping: {episode_title[:50]}...")
+                    continue
+                    
+                print(f"📥 Processing new episode: {episode_title[:50]}...")
+                
+                # Download processing (silent download process)
+                success, episode_dir = self.download_episode(episode, i+1, selected_channel['name'], quiet=True)
+                if not success or not episode_dir:
+                    continue
+                
+                # Auto transcribe
+                audio_filepath = episode_dir / "audio.mp3"
+                if audio_filepath.exists():
+                    transcribe_success = self.transcribe_audio_smart(
+                        audio_filepath, episode_title, 
+                        selected_channel['name'], episode_dir, auto_transcribe=True
+                    )
+                    if transcribe_success:
+                        # Auto summary - simulate transcribe_downloaded_files processing logic
+                        if self.gemini_client:
+                            # Use same summary generation logic as original code
+                            self.auto_generate_summary_for_episode(
+                                episode_title, selected_channel['name'], episode_dir
+                            )
+                        
+                        # Mark as processed
+                        if progress_tracker:
+                            progress_tracker.mark_episode_processed(podcast_name, episode_title)
+                        processed_count += 1
             
-            # Download processing (silent download process)
-            success, episode_dir = self.download_episode(episode, 1, selected_channel['name'], quiet=True)
-            if not success or not episode_dir:
-                return False, episode_title
-            
-            # Auto transcribe
-            audio_filepath = episode_dir / "audio.mp3"
-            if audio_filepath.exists():
-                transcribe_success = self.transcribe_audio_smart(
-                    audio_filepath, episode_title, 
-                    selected_channel['name'], episode_dir, auto_transcribe=True
-                )
-                if transcribe_success:
-                    # Auto summary - simulate transcribe_downloaded_files processing logic
-                    if self.gemini_client:
-                        # Use same summary generation logic as original code
-                        summary_success = self.auto_generate_summary_for_episode(
-                            episode_title, selected_channel['name'], episode_dir
-                        )
-                        return summary_success, episode_title
-                    return True, episode_title
-            
-            return False, episode_title
+            return processed_count > 0, last_episode_title
             
         except Exception as e:
             return False, ""
@@ -1561,80 +1569,89 @@ class Podnet:
         """
         try:
             # Search for channel's latest video
-            episodes = self.searcher.search_youtube_podcast(channel_name, num_episodes=1)
+            episodes = self.searcher.search_youtube_podcast(channel_name, num_episodes=10)
             if not episodes:
                 return False, ""
             
-            episode = episodes[0]
-            video_title = episode.get('title', 'Unknown')
+            # Process all videos in a loop, starting from newest
+            processed_count = 0
+            last_video_title = ""
             
-            # Check if already processed
-            if progress_tracker and progress_tracker.is_video_processed(channel_name, video_title):
-                print(f"⏭️  @{channel_name} latest video already processed, skipping")
-                return True, video_title
-            video_url = episode.get('url', '')
-            if not video_url:
-                return False, ""
-            
-            # Extract video ID
-            import re
-            video_id_match = re.search(r'(?:v=|/)([a-zA-Z0-9_-]{11})', video_url)
-            if not video_id_match:
-                return False, ""
-            
-            video_id = video_id_match.group(1)
-            
-            # Get video info
-            video_info = self.searcher.get_video_info(video_id)
-            title = episode.get('title', video_info.get('title', 'Unknown'))
-            channel_name_from_video = video_info.get('channel_name', channel_name)
-            published_date = episode.get('published_date', 'Recent')
-            
-            print(f"📥 Processing new video: {title[:50]}...")
-            
-            # Create episode directory
-            episode_dir = self.extractor.create_episode_folder(
-                channel_name_from_video, 
-                title, 
-                published_date
-            )
-            
-            # Try to extract transcript
-            transcript = self.extractor.extract_youtube_transcript(
-                video_id, 
-                video_url, 
-                title, 
-                episode_dir=episode_dir
-            )
-            
-            if transcript:
-                # Save transcript
-                transcript_filename = self.extractor.save_transcript(
-                    transcript, 
-                    title, 
+            for episode in episodes:
+                video_title = episode.get('title', 'Unknown')
+                last_video_title = video_title
+                
+                # Check if already processed
+                if progress_tracker and progress_tracker.is_video_processed(channel_name, video_title):
+                    # print(f"⏭️  @{channel_name} video already processed, skipping: {video_title[:50]}...")
+                    continue
+                    
+                video_url = episode.get('url', '')
+                if not video_url:
+                    continue
+                
+                # Extract video ID
+                import re
+                video_id_match = re.search(r'(?:v=|/)([a-zA-Z0-9_-]{11})', video_url)
+                if not video_id_match:
+                    continue
+                
+                video_id = video_id_match.group(1)
+                
+                # Get video info
+                video_info = self.searcher.get_video_info(video_id)
+                title = episode.get('title', video_info.get('title', 'Unknown'))
+                channel_name_from_video = video_info.get('channel_name', channel_name)
+                published_date = episode.get('published_date', 'Recent')
+                
+                print(f"📥 Processing new video: {title[:50]}...")
+                
+                # Create episode directory
+                episode_dir = self.extractor.create_episode_folder(
                     channel_name_from_video, 
-                    published_date, 
-                    episode_dir
+                    title, 
+                    published_date
                 )
                 
-                # Generate summary
-                if self.summarizer.gemini_client:
-                    summary = self.summarizer.generate_summary(transcript, title)
-                    if summary:
-                        # For English version, no translation needed (default English summary)
-                        final_summary = summary
-                        
-                        self.summarizer.save_summary(
-                            final_summary, 
-                            title, 
-                            episode_dir, 
-                            channel_name_from_video, 
-                            episode_dir
-                        )
+                # Try to extract transcript
+                transcript = self.extractor.extract_youtube_transcript(
+                    video_id, 
+                    video_url, 
+                    title, 
+                    episode_dir=episode_dir
+                )
                 
-                return True, title
+                if transcript:
+                    # Save transcript
+                    transcript_filename = self.extractor.save_transcript(
+                        transcript, 
+                        title, 
+                        channel_name_from_video, 
+                        published_date, 
+                        episode_dir
+                    )
+                    
+                    # Generate summary
+                    if self.summarizer.gemini_client:
+                        summary = self.summarizer.generate_summary(transcript, title)
+                        if summary:
+                            # For English version, no translation needed (default English summary)
+                            final_summary = summary
+                            
+                            self.summarizer.save_summary(
+                                final_summary, 
+                                title, 
+                                episode_dir, 
+                                channel_name_from_video, 
+                                episode_dir
+                            )
+                    
+                    # Mark as processed
+                    if progress_tracker:
+                        progress_tracker.mark_video_processed(channel_name, video_title)
+                    processed_count += 1
             
-            return False, title
+            return processed_count > 0, last_video_title
             
         except Exception as e:
             return False, ""
