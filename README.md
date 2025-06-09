@@ -2,7 +2,7 @@
 
 🧠 For knowledge-seekers who want to learn from audio content more effectively.
 
-🤖 Now with 24x7 automation service & 📧 smart email digest!
+🤖 Now with 24x7 automation service & 📧 smart email digest & 📒 sync to Notion!
 
 A fast & cost-free & AI-powered tool that:
 - 🎙️ transcribes audio content from Apple Podcast and YouTube platforms
@@ -19,6 +19,7 @@ A fast & cost-free & AI-powered tool that:
 
 - 🤖 **24x7 Intelligent Automation**: Set-and-forget service monitors your favorite podcasts and YouTube channels, automatically processing new episodes hourly - **autopodlens**
 - 📧 **Smart Email Digest**: Daily automated email summaries with AI-generated insights and processed content overview
+- 📝 **Sync to Notion**: Automatically sync processed content to Notion with your own Notion page and token
 - 🎯 **Interactive Manual Mode**: On-demand processing with intuitive command-line interface for immediate transcription and analysis of specific episodes - **podlens** 
 - ⚡ **Ultra-Fast Smart Transcription**: Multiple AI-powered methods (Groq API for speed, MLX Whisper for large files) with intelligent fallback chain
 - 🍎 **Apple Podcast & YouTube Integration**: Seamless content extraction from both major platforms with smart episode detection
@@ -57,6 +58,17 @@ GEMINI_API_KEY=your_gemini_api_key_here
 - Visit: https://aistudio.google.com/app/apikey
 - Get free API key
 - Used for generating intelligent summaries
+
+**Notion API (Sync to Notion):**
+- Visit: https://www.notion.so/my-integrations
+- Click **"+ New integration"**
+- Fill in the information:
+   - **Name**: `Markdown Uploader` (or any name)
+   - **Workspace**: Select your workspace
+   - **Type**: Internal integration
+- Click **"Submit"**
+- **Get Notion token**: Copy the generated **"Internal Integration Secret"** (starts with `secret_`)
+- **Get Notion page id**: Copy the page id after `pagename-` in the URL of your Notion page: https://www.notion.so/pagename-<your-page-id>
 
 ## 🚀 Usage
 
@@ -100,7 +112,16 @@ autopod(or autopodlens) --email-sync
 autopod(or autopodlens) --email-disable
 ```
 
-**You can also change the email service settings in the `.podlens/setting` file, then use '--email-sync' to sync the settings.**
+### Notion Sync Service (NEW!)
+```bash
+# Notion token and page id setup
+autopod(or autopodlens) --notiontoken <your_notion_token> --notionpage <your_notion_page_id>
+
+# Upload to Notion
+autopod(or autopodlens) --notion
+```
+
+**You can also change the email service & Notion sync settings in the `.podlens/setting` file, then use '--email-sync' to sync the settings.**
 
 ### Configuration Files (Auto-Generated)
 
@@ -221,20 +242,11 @@ Press Ctrl+Z to stop service
 ✅ Check complete - Podcasts: 1/1, YouTube: 1/1
 ```
 
-### Service Status Monitoring
+### Notion Sync Service Example
 ```bash
-# Check automation service status
-$ autopodlens --status
-📊 PodLens Intelligent Automation Service Status:
-  Running frequency: 1.0 hours
-  Monitor podcasts: Enabled
-  Monitor YouTube: Enabled
-
-📻 Monitoring 1 podcasts:
-  - thoughts on the market
-
-📺 Monitoring 1 YouTube channels:
-  - @Bloomberg_Live
+📒 Writing to your Notion...
+✅ Jennifer_Doudna_on_Future_of_G...: 100%|██████████████████████████████████| 2/2 [00:29<00:00, 14.52s/files]
+✅ Import successful!
 ```
 
 ## 📋 Workflow Example
@@ -303,6 +315,10 @@ your-project/
 - **Rich HTML Format**: Beautiful email layout with channel groupings and key insights
 - **Intelligent Content**: AI-powered daily digest highlighting important information
 - **Easy Management**: Simple commands for setup, status check, and configuration
+
+### Notion Sync Service
+- **Automatic Sync**: Automatically sync processed content to Notion with your own Notion page and token
+- **Smart Deduplication**: Already processed episodes are automatically skipped based on `.podlens/status.json` tracking
 
 ![PodLens Email Example](demo/email_en.jpg)
 

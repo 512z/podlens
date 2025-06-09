@@ -105,7 +105,15 @@ class ConfigManager:
                 f.write("# Email notification settings\n")
                 f.write("email_function = false\n")
                 f.write("user_email = #user@example.com\n")
-                f.write("notification_times = #08:00,18:00\n")
+                f.write("notification_times = #08:00,18:00\n\n")
+                f.write("# Notion sync settings\n")
+                
+                # Use actual setting values instead of default template
+                notion_token = settings.get('notion_token', '#your notion token found in https://www.notion.so/my-integrations')
+                notion_page_id = settings.get('notion_page_id', '#your notion page id found in https://www.notion.so/page-pageid')
+                
+                f.write(f"notion_token = {notion_token}\n")
+                f.write(f"notion_page_id = {notion_page_id}\n")
         except Exception as e:
             print(f"⚠️  Failed to save settings file: {e}")
     
@@ -557,6 +565,43 @@ def disable_email_service():
     email_service.save_email_settings(email_function=False)
     print("✅ Email service disabled")
 
+def update_notion_settings(token=None, page_id=None):
+    """Update Notion settings"""
+    config_manager = ConfigManager()
+    
+    # Read existing settings
+    settings = config_manager.load_settings()
+    
+    # Read existing Notion settings
+    notion_token = settings.get('notion_token', '')
+    notion_page_id = settings.get('notion_page_id', '')
+    
+    # Update settings
+    if token:
+        notion_token = token
+        settings['notion_token'] = token
+        print(f"✅ Notion token updated")
+    
+    if page_id:
+        notion_page_id = page_id
+        settings['notion_page_id'] = page_id
+        print(f"✅ Notion page ID updated")
+    
+    # Save updated settings
+    config_manager.save_settings(settings)
+    
+    return notion_token, notion_page_id
+
+def run_notion_sync():
+    """Execute Notion sync"""
+    try:
+        from .notion_en import main as notion_main
+        notion_main()
+    except ImportError as e:
+        print(f"❌ Failed to import Notion module: {e}")
+    except Exception as e:
+        print(f"❌ Notion sync failed: {e}")
+
 def main():
     """Main function for command line interface"""
     parser = argparse.ArgumentParser(description='PodLens Automation Service')
@@ -566,6 +611,9 @@ def main():
     parser.add_argument('--email-sync', action='store_true', help='Sync email configuration to cron tasks')
     parser.add_argument('--email-status', action='store_true', help='Show email service status')
     parser.add_argument('--email-disable', action='store_true', help='Disable email service')
+    parser.add_argument('--notion', action='store_true', help='Sync to Notion')
+    parser.add_argument('--notiontoken', metavar='TOKEN', help='Configure Notion token')
+    parser.add_argument('--notionpage', metavar='PAGE_ID', help='Configure Notion page ID')
     
     args = parser.parse_args()
     
@@ -627,6 +675,12 @@ def main():
         show_email_status()
     elif args.email_disable:
         disable_email_service()
+    elif args.notion:
+        run_notion_sync()
+    elif args.notiontoken:
+        update_notion_settings(token=args.notiontoken)
+    elif args.notionpage:
+        update_notion_settings(page_id=args.notionpage)
     else:
         start_automation()
 

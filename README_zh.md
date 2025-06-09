@@ -2,7 +2,7 @@
 
 🧠 播客透镜, 为知识探索者打造, 更有效地从音频内容中学习。
 
-🤖 现已支持24x7自动化服务 & 📧 智能邮件摘要！
+🤖 现已支持24x7自动化服务 & 📧 智能邮件摘要 & 📒 同步到 Notion！
 
 一个快速、免费的AI驱动工具，可以:
 - 🎙️ 转录来自 Apple Podcast 和 YouTube 平台的音频内容
@@ -20,6 +20,7 @@
 - 🤖 **24x7智能自动化**: 一键设置即可忘记，自动监控您喜爱的播客和YouTube频道，每小时自动处理新发布的节目 - **autopod**
 - 🎯 **交互式手动模式**: 按需处理功能，通过直观的命令行界面即时转录和分析特定节目 - **pod**
 - 📧 **智能邮件摘要**: 每日自动邮件报告，包含AI生成的洞察和处理内容概览
+- 📒 **同步到 Notion**: 自动同步处理内容到 Notion 中，使用您自己的 Notion 页面和 token
 - ⚡ **超高速智能转录**: 多种AI驱动方法（Groq API高速处理，MLX Whisper处理大文件）配备智能回退机制
 - 🍎 **Apple Podcast & YouTube集成**: 无缝支持两大主流平台，智能检测新节目
 - 🧠 **AI驱动的深度分析**: 使用Google Gemini AI生成智能摘要和洞察，结构化主题分析
@@ -58,6 +59,19 @@ GEMINI_API_KEY=your_gemini_api_key_here
   - 访问: https://aistudio.google.com/app/apikey
   - 获取免费 API 密钥
   - 用于生成智能摘要
+
+**Notion API (Sync to Notion):**
+
+  - 访问: https://www.notion.so/my-integrations
+  - 点击 **"+ New integration"**
+  - 填写信息:
+    - **Name**: `Markdown Uploader` (or any name)
+    - **Workspace**: Select your workspace
+    - **Type**: Internal integration
+  - 点击 **"Submit"**
+  - **获取 Notion token**: 复制生成的 **"Internal Integration Secret"** (以 `secret_` 开头)
+  - **获取 Notion page id**: 复制 Notion 页面 URL 中 `pagename-` 后的页面 ID: https://www.notion.so/pagename-<your-page-id>
+
 
 ## 🚀 使用方法
 
@@ -102,8 +116,16 @@ autopod --email-sync
 autopod --email-disable
 ```
 
-**您也可以在`.podlens/setting`文件中更改邮件服务设置，然后使用'--email-sync'同步设置。**
+### Notion 同步服务（NEW！）
+```bash
+# Notion token 和 page id 设置
+autopod(or autopodlens) --notiontoken <your_notion_token> --notionpage <your_notion_page_id>
 
+# 同步到 Notion
+autopod(or autopodlens) --notion
+```
+
+**您也可以在`.podlens/setting`文件中更改邮件服务 & Notion 同步设置，然后使用'--email-sync'同步设置。**
 
 ### 配置文件（自动生成）
 - `my_pod.md` - 配置监控的播客（自动创建）
@@ -225,20 +247,11 @@ $ autopod
 ✅ 检查完成 - 播客: 1/1, YouTube: 1/1
 ```
 
-### 服务状态监控
+### Notion 同步服务示例
 ```bash
-# 检查自动化服务状态
-$ autopod --status
-📊 PodLens智能自动化服务状态:
-  运行频率: 1.0 小时
-  监控播客: 启用
-  监控YouTube: 启用
-
-📻 监控的 1 个播客:
-  - thoughts on the market
-
-📺 监控的 1 个YouTube频道:
-  - @Bloomberg_Live
+📒 正在写入您的notion
+✅ Jennifer_Doudna_on_Future_of_G...: 100%|███████████████████████████████████| 2/2 [00:15<00:00,  7.52s/文件]
+✅ 导入成功!
 ```
 
 ## 📋 工作流程示例
@@ -311,6 +324,10 @@ your-project/
 - **轻松管理**: 简单的设置、状态检查和配置命令
 
 ![PodLens Email Example](demo/email_ch.png)
+
+### Notion 同步服务
+- **自动同步**: 自动同步处理内容到 Notion 中，使用您自己的 Notion 页面和 token
+- **智能去重**: 已处理的内容自动跳过
 
 ### 智能转录逻辑
 

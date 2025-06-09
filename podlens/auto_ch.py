@@ -108,7 +108,15 @@ class ConfigManager:
                 f.write("# 邮件通知设置\n")
                 f.write("email_function = false\n")
                 f.write("user_email = #user@example.com\n")
-                f.write("notification_times = #08:00,18:00\n")
+                f.write("notification_times = #08:00,18:00\n\n")
+                f.write("# Notion 同步设置\n")
+                
+                # 使用实际的设置值而不是默认模板
+                notion_token = settings.get('notion_token', '#your notion token found in https://www.notion.so/my-integrations')
+                notion_page_id = settings.get('notion_page_id', '#your notion page id found in https://www.notion.so/page-pageid')
+                
+                f.write(f"notion_token = {notion_token}\n")
+                f.write(f"notion_page_id = {notion_page_id}\n")
         except Exception as e:
             print(f"⚠️  保存设置文件失败: {e}")
     
@@ -564,6 +572,43 @@ def disable_email_service():
     email_service.save_email_settings(email_function=False)
     print("✅ 邮件服务已禁用")
 
+def update_notion_settings(token=None, page_id=None):
+    """更新Notion设置"""
+    config_manager = ConfigManager()
+    
+    # 读取现有设置
+    settings = config_manager.load_settings()
+    
+    # 读取现有的Notion设置
+    notion_token = settings.get('notion_token', '')
+    notion_page_id = settings.get('notion_page_id', '')
+    
+    # 更新设置
+    if token:
+        notion_token = token
+        settings['notion_token'] = token
+        print(f"✅ Notion token 已更新")
+    
+    if page_id:
+        notion_page_id = page_id
+        settings['notion_page_id'] = page_id
+        print(f"✅ Notion 页面ID 已更新")
+    
+    # 保存更新后的设置
+    config_manager.save_settings(settings)
+    
+    return notion_token, notion_page_id
+
+def run_notion_sync():
+    """执行Notion同步"""
+    try:
+        from .notion_ch import main as notion_main
+        notion_main()
+    except ImportError as e:
+        print(f"❌ 导入Notion模块失败: {e}")
+    except Exception as e:
+        print(f"❌ Notion同步失败: {e}")
+
 def main():
     """主函数用于命令行接口"""
     parser = argparse.ArgumentParser(description='PodLens 自动化服务')
@@ -573,6 +618,9 @@ def main():
     parser.add_argument('--email-sync', action='store_true', help='同步邮件配置到cron任务')
     parser.add_argument('--email-status', action='store_true', help='显示邮件服务状态')
     parser.add_argument('--email-disable', action='store_true', help='禁用邮件服务')
+    parser.add_argument('--notion', action='store_true', help='同步到Notion')
+    parser.add_argument('--notiontoken', metavar='TOKEN', help='配置Notion token')
+    parser.add_argument('--notionpage', metavar='PAGE_ID', help='配置Notion页面ID')
     
     args = parser.parse_args()
     
@@ -634,6 +682,12 @@ def main():
         show_email_status()
     elif args.email_disable:
         disable_email_service()
+    elif args.notion:
+        run_notion_sync()
+    elif args.notiontoken:
+        update_notion_settings(token=args.notiontoken)
+    elif args.notionpage:
+        update_notion_settings(page_id=args.notionpage)
     else:
         start_automation()
 
