@@ -324,7 +324,11 @@ class AutoEngine:
                 self.progress_tracker.mark_episode_processed(podcast_name, episode_title)
                 return True
             else:
-                print(f"❌ {podcast_name} processing failed")
+                # Distinguish between "no new content" and "actual failure"
+                if episode_title:  # If episode_title exists, episodes were found but all already processed
+                    print(f"ℹ️  {podcast_name} no new content to process")
+                else:  # If no episode_title, it's an actual failure (search failed, etc.)
+                    print(f"❌ {podcast_name} processing failed")
                 return False
                 
         except Exception as e:
@@ -345,7 +349,11 @@ class AutoEngine:
                 self.progress_tracker.mark_video_processed(channel_name, video_title)
                 return True
             else:
-                print(f"❌ @{channel_name} processing failed")
+                # Distinguish between "no new content" and "actual failure"
+                if video_title:  # If video_title exists, videos were found but all already processed
+                    print(f"ℹ️  @{channel_name} no new content to process")
+                else:  # If no video_title, it's an actual failure (search failed, etc.)
+                    print(f"❌ @{channel_name} processing failed")
                 return False
                 
         except Exception as e:

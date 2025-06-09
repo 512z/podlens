@@ -327,7 +327,11 @@ class AutoEngine:
                 self.progress_tracker.mark_episode_processed(podcast_name, episode_title)
                 return True
             else:
-                print(f"❌ {podcast_name} 处理失败")
+                # 区分"无新内容"和"真正失败"
+                if episode_title:  # 如果有episode_title说明找到了episodes，只是都已处理过
+                    print(f"ℹ️  {podcast_name} 无新内容需要处理")
+                else:  # 如果没有episode_title说明是真正的失败（如搜索失败等）
+                    print(f"❌ {podcast_name} 处理失败")
                 return False
                 
         except Exception as e:
@@ -348,7 +352,11 @@ class AutoEngine:
                 self.progress_tracker.mark_video_processed(channel_name, video_title)
                 return True
             else:
-                print(f"❌ @{channel_name} 处理失败")
+                # 区分"无新内容"和"真正失败"
+                if video_title:  # 如果有video_title说明找到了videos，只是都已处理过
+                    print(f"ℹ️  @{channel_name} 无新内容需要处理")
+                else:  # 如果没有video_title说明是真正的失败（如搜索失败等）
+                    print(f"❌ @{channel_name} 处理失败")
                 return False
                 
         except Exception as e:
