@@ -1448,7 +1448,7 @@ class ApplePodcastExplorer:
                 return False, ""
             
             # 获取最新剧集（静默）
-            episodes = self.get_recent_episodes(selected_channel['feed_url'], 5, quiet=True)
+            episodes = self.get_recent_episodes(selected_channel['feed_url'], 2, quiet=True)
             if not episodes:
                 return False, ""
             
@@ -1590,7 +1590,7 @@ class Podnet:
         """
         try:
             # 搜索频道最新视频
-            episodes = self.searcher.search_youtube_podcast(channel_name, num_episodes=10)
+            episodes = self.searcher.search_youtube_podcast(channel_name, num_episodes=2)
             if not episodes:
                 return False, ""
             

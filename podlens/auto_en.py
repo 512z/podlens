@@ -320,8 +320,7 @@ class AutoEngine:
             
             if success:
                 print(f"✅ {podcast_name} processing complete")
-                # Mark as processed (using actual episode title)
-                self.progress_tracker.mark_episode_processed(podcast_name, episode_title)
+                # Note: Already marked as processed in core method, no need to duplicate
                 return True
             else:
                 # Distinguish between "no new content" and "actual failure"
@@ -345,8 +344,7 @@ class AutoEngine:
             
             if success:
                 print(f"✅ @{channel_name} processing complete")
-                # Mark as processed (using actual video title)
-                self.progress_tracker.mark_video_processed(channel_name, video_title)
+                # Note: Already marked as processed in core method, no need to duplicate
                 return True
             else:
                 # Distinguish between "no new content" and "actual failure"

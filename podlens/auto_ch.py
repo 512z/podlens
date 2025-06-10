@@ -323,8 +323,7 @@ class AutoEngine:
             
             if success:
                 print(f"✅ {podcast_name} 处理完成")
-                # 标记为已处理（使用实际的episode标题）
-                self.progress_tracker.mark_episode_processed(podcast_name, episode_title)
+                # 注意：已在core方法中标记为已处理，无需重复标记
                 return True
             else:
                 # 区分"无新内容"和"真正失败"
@@ -348,8 +347,7 @@ class AutoEngine:
             
             if success:
                 print(f"✅ @{channel_name} 处理完成")
-                # 标记为已处理（使用实际的视频标题）
-                self.progress_tracker.mark_video_processed(channel_name, video_title)
+                # 注意：已在core方法中标记为已处理，无需重复标记
                 return True
             else:
                 # 区分"无新内容"和"真正失败"
@@ -358,7 +356,6 @@ class AutoEngine:
                 else:  # 如果没有video_title说明是真正的失败（如搜索失败等）
                     print(f"❌ @{channel_name} 处理失败")
                 return False
-                
         except Exception as e:
             print(f"❌ 处理YouTube频道 @{channel_name} 异常: {e}")
             return False

@@ -526,7 +526,9 @@ class TranscriptExtractor:
                     'preferredcodec': 'mp3',
                     'preferredquality': '192',
                 }],
-                'quiet': True,  # Reduce output
+                'quiet': True,          # Reduce output
+                'no_warnings': True,    # Suppress warnings
+                'noprogress': True,     # Suppress download progress
             }
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
