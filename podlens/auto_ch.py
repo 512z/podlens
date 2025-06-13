@@ -614,6 +614,19 @@ def run_notion_sync():
     except Exception as e:
         print(f"❌ Notion同步失败: {e}")
 
+def clear_notion_cache():
+    """清理Notion缓存"""
+    cache_file = Path('.podlens/notion_cache.json')
+    try:
+        if cache_file.exists():
+            cache_file.unlink()
+            print("✅ Notion缓存已清理")
+            print("ℹ️  下次同步时将重新构建缓存")
+        else:
+            print("ℹ️  缓存文件不存在，无需清理")
+    except Exception as e:
+        print(f"❌ 清理缓存失败: {e}")
+
 def main():
     """主函数用于命令行接口"""
     parser = argparse.ArgumentParser(description='PodLens 自动化服务')
@@ -626,6 +639,7 @@ def main():
     parser.add_argument('--notion', action='store_true', help='同步到Notion')
     parser.add_argument('--notiontoken', metavar='TOKEN', help='配置Notion token')
     parser.add_argument('--notionpage', metavar='PAGE_ID', help='配置Notion页面ID')
+    parser.add_argument('--notion-clear-cache', action='store_true', help='清理Notion缓存')
     
     args = parser.parse_args()
     
@@ -693,6 +707,8 @@ def main():
         update_notion_settings(token=args.notiontoken)
     elif args.notionpage:
         update_notion_settings(page_id=args.notionpage)
+    elif args.notion_clear_cache:
+        clear_notion_cache()
     else:
         start_automation()
 

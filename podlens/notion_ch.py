@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 import re
 from tqdm import tqdm
+from datetime import datetime
 
 class NotionMarkdownUploader:
     def __init__(self, token, root_page_id):
@@ -20,6 +21,59 @@ class NotionMarkdownUploader:
         self.uploaded_files = set()  # 记录已上传的文件
         self.progress_bar = None  # 进度条引用
         
+        # 添加缓存机制
+        self.cache_file = Path('.podlens/notion_cache.json')
+        self.cache = self.load_cache()
+        
+    def load_cache(self):
+        """加载本地缓存"""
+        try:
+            if self.cache_file.exists():
+                with open(self.cache_file, 'r', encoding='utf-8') as f:
+                    cache_data = json.load(f)
+                    # 验证缓存结构
+                    if isinstance(cache_data, dict) and 'pages' in cache_data:
+                        return cache_data
+            # 如果文件不存在或格式不正确，返回默认结构
+            return {
+                'pages': {},  # 格式: {parent_id: {title: page_id}}
+                'last_updated': datetime.now().isoformat(),
+                'version': '1.0'
+            }
+        except Exception as e:
+            print(f"⚠️  加载缓存失败，将重新创建: {e}")
+            return {
+                'pages': {},
+                'last_updated': datetime.now().isoformat(),
+                'version': '1.0'
+            }
+    
+    def save_cache(self):
+        """保存缓存到文件"""
+        try:
+            # 确保目录存在
+            self.cache_file.parent.mkdir(exist_ok=True)
+            
+            # 更新时间戳
+            self.cache['last_updated'] = datetime.now().isoformat()
+            
+            with open(self.cache_file, 'w', encoding='utf-8') as f:
+                json.dump(self.cache, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"⚠️  保存缓存失败: {e}")
+    
+    def get_cached_page_id(self, parent_id, title):
+        """从缓存中获取页面ID"""
+        parent_cache = self.cache['pages'].get(parent_id, {})
+        return parent_cache.get(title)
+    
+    def cache_page_info(self, parent_id, title, page_id):
+        """缓存页面信息"""
+        if parent_id not in self.cache['pages']:
+            self.cache['pages'][parent_id] = {}
+        self.cache['pages'][parent_id][title] = page_id
+        self.save_cache()
+    
     def get_existing_pages(self, parent_id):
         """获取父页面下的所有子页面"""
         response = requests.get(
@@ -30,20 +84,43 @@ class NotionMarkdownUploader:
         if response.status_code == 200:
             data = response.json()
             existing_titles = []
+            # 同时更新缓存
+            parent_cache = {}
             for block in data.get('results', []):
                 if block.get('type') == 'child_page':
                     title = block.get('child_page', {}).get('title', '')
+                    page_id = block.get('id', '')
                     existing_titles.append(title)
+                    if title and page_id:
+                        parent_cache[title] = page_id
+            
+            # 更新缓存
+            if parent_cache:
+                self.cache['pages'][parent_id] = parent_cache
+                self.save_cache()
+            
             return existing_titles
         return []
         
     def page_exists(self, parent_id, title):
-        """检查页面是否已存在"""
+        """检查页面是否已存在 - 使用缓存优化"""
+        # 先检查缓存
+        cached_page_id = self.get_cached_page_id(parent_id, title)
+        if cached_page_id:
+            return True
+        
+        # 缓存中没有，调用API并更新缓存
         existing_pages = self.get_existing_pages(parent_id)
         return title in existing_pages
     
     def get_page_id_by_title(self, parent_id, title):
-        """根据标题获取页面ID"""
+        """根据标题获取页面ID - 使用缓存优化"""
+        # 先检查缓存
+        cached_page_id = self.get_cached_page_id(parent_id, title)
+        if cached_page_id:
+            return cached_page_id
+        
+        # 缓存中没有，调用API
         response = requests.get(
             f'{self.base_url}/blocks/{parent_id}/children',
             headers=self.headers
@@ -54,8 +131,11 @@ class NotionMarkdownUploader:
             for block in data.get('results', []):
                 if block.get('type') == 'child_page':
                     page_title = block.get('child_page', {}).get('title', '')
+                    page_id = block.get('id', '')
                     if page_title == title:
-                        return block.get('id')
+                        # 更新缓存
+                        self.cache_page_info(parent_id, page_title, page_id)
+                        return page_id
         return None
     
     def count_summary_files(self, folder_path):
@@ -356,6 +436,9 @@ class NotionMarkdownUploader:
             page_data = response.json()
             page_id = page_data['id']
             
+            # 更新缓存
+            self.cache_page_info(parent_id, title, page_id)
+            
             # 如果有超过100个blocks，需要分批添加
             if len(content_blocks) > 100:
                 remaining_blocks = content_blocks[100:]
@@ -607,6 +690,11 @@ def main():
     
     # 第一行输出
     print("📒 正在写入您的notion")
+    
+    # 显示缓存统计
+    cached_pages = sum(len(pages) for pages in uploader.cache['pages'].values())
+    if cached_pages > 0:
+        print(f"💾 已缓存 {cached_pages} 个页面信息，将显著加速检查过程")
     
     # 计算总文件数
     total_files = uploader.count_summary_files(markdown_folder)

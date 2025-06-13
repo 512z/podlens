@@ -608,6 +608,19 @@ def run_notion_sync():
     except Exception as e:
         print(f"❌ Notion sync failed: {e}")
 
+def clear_notion_cache():
+    """Clear Notion cache"""
+    cache_file = Path('.podlens/notion_cache.json')
+    try:
+        if cache_file.exists():
+            cache_file.unlink()
+            print("✅ Notion cache cleared")
+            print("ℹ️  Cache will be rebuilt on next sync")
+        else:
+            print("ℹ️  Cache file does not exist, no need to clear")
+    except Exception as e:
+        print(f"❌ Failed to clear cache: {e}")
+
 def main():
     """Main function for command line interface"""
     parser = argparse.ArgumentParser(description='PodLens Automation Service')
@@ -620,6 +633,7 @@ def main():
     parser.add_argument('--notion', action='store_true', help='Sync to Notion')
     parser.add_argument('--notiontoken', metavar='TOKEN', help='Configure Notion token')
     parser.add_argument('--notionpage', metavar='PAGE_ID', help='Configure Notion page ID')
+    parser.add_argument('--notion-clear-cache', action='store_true', help='Clear Notion cache')
     
     args = parser.parse_args()
     
@@ -687,6 +701,8 @@ def main():
         update_notion_settings(token=args.notiontoken)
     elif args.notionpage:
         update_notion_settings(page_id=args.notionpage)
+    elif args.notion_clear_cache:
+        clear_notion_cache()
     else:
         start_automation()
 

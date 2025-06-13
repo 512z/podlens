@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 import re
 from tqdm import tqdm
+from datetime import datetime
 
 class NotionMarkdownUploader:
     def __init__(self, token, root_page_id):
@@ -20,6 +21,59 @@ class NotionMarkdownUploader:
         self.uploaded_files = set()  # Record uploaded files
         self.progress_bar = None  # Progress bar reference
         
+        # Add caching mechanism
+        self.cache_file = Path('.podlens/notion_cache.json')
+        self.cache = self.load_cache()
+        
+    def load_cache(self):
+        """Load local cache"""
+        try:
+            if self.cache_file.exists():
+                with open(self.cache_file, 'r', encoding='utf-8') as f:
+                    cache_data = json.load(f)
+                    # Validate cache structure
+                    if isinstance(cache_data, dict) and 'pages' in cache_data:
+                        return cache_data
+            # If file doesn't exist or format is incorrect, return default structure
+            return {
+                'pages': {},  # Format: {parent_id: {title: page_id}}
+                'last_updated': datetime.now().isoformat(),
+                'version': '1.0'
+            }
+        except Exception as e:
+            print(f"⚠️  Failed to load cache, will recreate: {e}")
+            return {
+                'pages': {},
+                'last_updated': datetime.now().isoformat(),
+                'version': '1.0'
+            }
+    
+    def save_cache(self):
+        """Save cache to file"""
+        try:
+            # Ensure directory exists
+            self.cache_file.parent.mkdir(exist_ok=True)
+            
+            # Update timestamp
+            self.cache['last_updated'] = datetime.now().isoformat()
+            
+            with open(self.cache_file, 'w', encoding='utf-8') as f:
+                json.dump(self.cache, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"⚠️  Failed to save cache: {e}")
+    
+    def get_cached_page_id(self, parent_id, title):
+        """Get page ID from cache"""
+        parent_cache = self.cache['pages'].get(parent_id, {})
+        return parent_cache.get(title)
+    
+    def cache_page_info(self, parent_id, title, page_id):
+        """Cache page information"""
+        if parent_id not in self.cache['pages']:
+            self.cache['pages'][parent_id] = {}
+        self.cache['pages'][parent_id][title] = page_id
+        self.save_cache()
+    
     def get_existing_pages(self, parent_id):
         """Get all child pages under the parent page"""
         response = requests.get(
@@ -30,20 +84,43 @@ class NotionMarkdownUploader:
         if response.status_code == 200:
             data = response.json()
             existing_titles = []
+            # Update cache at the same time
+            parent_cache = {}
             for block in data.get('results', []):
                 if block.get('type') == 'child_page':
                     title = block.get('child_page', {}).get('title', '')
+                    page_id = block.get('id', '')
                     existing_titles.append(title)
+                    if title and page_id:
+                        parent_cache[title] = page_id
+            
+            # Update cache
+            if parent_cache:
+                self.cache['pages'][parent_id] = parent_cache
+                self.save_cache()
+            
             return existing_titles
         return []
         
     def page_exists(self, parent_id, title):
-        """Check if page already exists"""
+        """Check if page already exists - optimized with cache"""
+        # Check cache first
+        cached_page_id = self.get_cached_page_id(parent_id, title)
+        if cached_page_id:
+            return True
+        
+        # Not in cache, call API and update cache
         existing_pages = self.get_existing_pages(parent_id)
         return title in existing_pages
     
     def get_page_id_by_title(self, parent_id, title):
-        """Get page ID by title"""
+        """Get page ID by title - optimized with cache"""
+        # Check cache first
+        cached_page_id = self.get_cached_page_id(parent_id, title)
+        if cached_page_id:
+            return cached_page_id
+        
+        # Not in cache, call API
         response = requests.get(
             f'{self.base_url}/blocks/{parent_id}/children',
             headers=self.headers
@@ -54,8 +131,11 @@ class NotionMarkdownUploader:
             for block in data.get('results', []):
                 if block.get('type') == 'child_page':
                     page_title = block.get('child_page', {}).get('title', '')
+                    page_id = block.get('id', '')
                     if page_title == title:
-                        return block.get('id')
+                        # Update cache
+                        self.cache_page_info(parent_id, page_title, page_id)
+                        return page_id
         return None
     
     def count_summary_files(self, folder_path):
@@ -356,6 +436,9 @@ class NotionMarkdownUploader:
             page_data = response.json()
             page_id = page_data['id']
             
+            # Update cache
+            self.cache_page_info(parent_id, title, page_id)
+            
             # If there are more than 100 blocks, need to add them in batches
             if len(content_blocks) > 100:
                 remaining_blocks = content_blocks[100:]
@@ -607,6 +690,11 @@ def main():
     
     # First line output
     print("📒 Writing to your Notion...")
+    
+    # Show cache statistics
+    cached_pages = sum(len(pages) for pages in uploader.cache['pages'].values())
+    if cached_pages > 0:
+        print(f"💾 Cached {cached_pages} page information, will significantly speed up the checking process")
     
     # Calculate total files
     total_files = uploader.count_summary_files(markdown_folder)
