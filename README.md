@@ -45,9 +45,10 @@ Create a `.env` file in your working directory:
 # .env file content
 GROQ_API_KEY=your_groq_api_key_here
 GEMINI_API_KEY=your_gemini_api_key_here
+MODEL=gemini-2.5-flash-lite
 ```
 
-### 2. Get API Keys
+### 2. Get API Keys & Configure Model
 
 **Groq API (Recommended - Ultra-fast transcription):**
 - Visit: https://console.groq.com/
@@ -58,6 +59,15 @@ GEMINI_API_KEY=your_gemini_api_key_here
 - Visit: https://aistudio.google.com/app/apikey
 - Get free API key
 - Used for generating intelligent summaries
+
+**Gemini Model (Required - AI Model Configuration):**
+- **Must be configured** in your `.env` file
+- Available models:
+  - `gemini-2.5-flash-lite` (Recommended - Fast and cost-effective)
+  - `gemini-1.5-pro` (More powerful, higher quality)
+  - `gemini-2.5-flash-preview-05-20` (Preview version)
+- The tool will display which model is being used on startup
+- If not configured, the tool will show an error and exit
 
 **Notion API (Sync to Notion):**
 - Visit: https://www.notion.so/my-integrations

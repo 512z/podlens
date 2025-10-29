@@ -10,6 +10,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from .apple_podcast_en import ApplePodcastExplorer, MLX_WHISPER_AVAILABLE, MLX_DEVICE, GROQ_AVAILABLE
 from .youtube_en import Podnet
+from . import get_model_name
 
 # Enhanced .env loading function
 def load_env_robust():
@@ -104,6 +105,16 @@ def main():
     # Keep original interactive mode unchanged
     show_logo()
     print()
+
+    # Display model information
+    try:
+        model_name = get_model_name()
+        print(f"🤖 Using Gemini model: {model_name}")
+        print()
+    except ValueError as e:
+        print(str(e))
+        return
+
     print("🎧🎥 Media Transcription & Summary Tool")
     print()
     print("=" * 50)
@@ -141,53 +152,87 @@ def main():
 def apple_main():
     """Apple Podcast main processing function"""
     explorer = ApplePodcastExplorer()
-    
+
     while True:
-        # Get user input
-        podcast_name = input("\nPlease enter the podcast channel name you want to search (or press Enter to return to main menu): ").strip()
-        
-        if not podcast_name:
+        # Ask user to select search type
+        print("\n📡 Search by:")
+        print("1. Channel name (browse episodes from a podcast)")
+        print("2. Episode name (search specific episodes)")
+        print("0. Return to main menu")
+
+        search_type = input("\nPlease select (1/2/0): ").strip()
+
+        if search_type == '0':
             print("🔙 Back to main menu")
             break
-        
-        # Search for channels
-        channels = explorer.search_podcast_channel(podcast_name)
-        
-        # Display channels and let user select
-        selected_index = explorer.display_channels(channels)
-        
-        if selected_index == -1:
-            continue
-        
-        selected_channel = channels[selected_index]
-        
-        # Check if RSS feed URL is available
-        if not selected_channel['feed_url']:
-            print("❌ This channel does not have an available RSS feed URL")
-            continue
-        
-        # Ask user how many episodes to preview
-        episode_limit_input = input("Please select the number of episodes to preview (default 10): ").strip()
-        if episode_limit_input:
-            try:
-                episode_limit = int(episode_limit_input)
-                episode_limit = max(1, min(episode_limit, 50))  # Limit between 1-50
-            except ValueError:
-                print("Invalid input, using default value 10")
+        elif search_type == '1':
+            # Original channel search flow
+            podcast_name = input("\nPlease enter the podcast channel name you want to search: ").strip()
+
+            if not podcast_name:
+                continue
+
+            # Search for channels
+            channels = explorer.search_podcast_channel(podcast_name)
+
+            # Display channels and let user select
+            selected_index = explorer.display_channels(channels)
+
+            if selected_index == -1:
+                continue
+
+            selected_channel = channels[selected_index]
+
+            # Check if RSS feed URL is available
+            if not selected_channel['feed_url']:
+                print("❌ This channel does not have an available RSS feed URL")
+                continue
+
+            # Ask user how many episodes to preview
+            episode_limit_input = input("Please select the number of episodes to preview (default 10): ").strip()
+            if episode_limit_input:
+                try:
+                    episode_limit = int(episode_limit_input)
+                    episode_limit = max(1, min(episode_limit, 50))  # Limit between 1-50
+                except ValueError:
+                    print("Invalid input, using default value 10")
+                    episode_limit = 10
+            else:
                 episode_limit = 10
+
+            episodes = explorer.get_recent_episodes(selected_channel['feed_url'], episode_limit)
+
+            # Display episodes
+            explorer.display_episodes(episodes, selected_channel['name'])
+
+            # Ask if user wants to download
+            explorer.download_episodes(episodes, selected_channel['name'])
+
+        elif search_type == '2':
+            # New episode search flow
+            episode_name = input("\nPlease enter the episode name you want to search: ").strip()
+
+            if not episode_name:
+                continue
+
+            # Search for episodes
+            episodes = explorer.search_podcast_episode(episode_name)
+
+            # Display episodes and let user select
+            selected_indices = explorer.display_episode_search_results(episodes)
+
+            if not selected_indices:
+                continue
+
+            # Download selected episodes
+            explorer.download_searched_episodes(episodes, selected_indices)
+
         else:
-            episode_limit = 10
-        
-        episodes = explorer.get_recent_episodes(selected_channel['feed_url'], episode_limit)
-        
-        # Display episodes
-        explorer.display_episodes(episodes, selected_channel['name'])
-        
-        # Ask if user wants to download
-        explorer.download_episodes(episodes, selected_channel['name'])
-        
+            print("❌ Invalid selection, please enter 1, 2, or 0")
+            continue
+
         # Ask if user wants to continue
-        continue_search = input("\nContinue searching other channels? (y/n): ").strip().lower()
+        continue_search = input("\nContinue searching? (y/n): ").strip().lower()
         if continue_search not in ['y', 'yes']:
             print("🔙 Back to main menu")
             break

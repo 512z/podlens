@@ -10,6 +10,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from .apple_podcast_ch import ApplePodcastExplorer, MLX_WHISPER_AVAILABLE, MLX_DEVICE, GROQ_AVAILABLE
 from .youtube_ch import Podnet
+from . import get_model_name
 
 # Enhanced .env loading function
 def load_env_robust():
@@ -103,6 +104,16 @@ def main():
     # 原有的交互模式保持不变
     show_logo()
     print()
+
+    # 显示模型信息
+    try:
+        model_name = get_model_name()
+        print(f"🤖 使用 Gemini 模型: {model_name}")
+        print()
+    except ValueError as e:
+        print(str(e))
+        return
+
     print("🎧🎥 媒体转录与摘要工具")
     print()
     print("=" * 50)
@@ -140,53 +151,87 @@ def main():
 def apple_main():
     """Apple Podcast 主处理函数"""
     explorer = ApplePodcastExplorer()
-    
+
     while True:
-        # 获取用户输入
-        podcast_name = input("\n请输入您要搜索的播客频道名称（或直接回车返回主菜单）: ").strip()
-        
-        if not podcast_name:
+        # 询问用户选择搜索类型
+        print("\n📡 搜索方式:")
+        print("1. 频道名称（浏览播客的集数）")
+        print("2. 集数名称（搜索特定集数）")
+        print("0. 返回主菜单")
+
+        search_type = input("\n请选择 (1/2/0): ").strip()
+
+        if search_type == '0':
             print("🔙 返回主菜单")
             break
-        
-        # 搜索频道
-        channels = explorer.search_podcast_channel(podcast_name)
-        
-        # 展示频道并让用户选择
-        selected_index = explorer.display_channels(channels)
-        
-        if selected_index == -1:
-            continue
-        
-        selected_channel = channels[selected_index]
-        
-        # 检查RSS订阅链接是否可用
-        if not selected_channel['feed_url']:
-            print("❌ 该频道没有可用的 RSS 订阅链接")
-            continue
-        
-        # 询问用户要预览的节目数量
-        episode_limit_input = input("请选择要预览的节目数量（默认 10）: ").strip()
-        if episode_limit_input:
-            try:
-                episode_limit = int(episode_limit_input)
-                episode_limit = max(1, min(episode_limit, 50))  # 限制在1-50之间
-            except ValueError:
-                print("输入无效，使用默认值 10")
+        elif search_type == '1':
+            # 原有的频道搜索流程
+            podcast_name = input("\n请输入您要搜索的播客频道名称: ").strip()
+
+            if not podcast_name:
+                continue
+
+            # 搜索频道
+            channels = explorer.search_podcast_channel(podcast_name)
+
+            # 展示频道并让用户选择
+            selected_index = explorer.display_channels(channels)
+
+            if selected_index == -1:
+                continue
+
+            selected_channel = channels[selected_index]
+
+            # 检查RSS订阅链接是否可用
+            if not selected_channel['feed_url']:
+                print("❌ 该频道没有可用的 RSS 订阅链接")
+                continue
+
+            # 询问用户要预览的节目数量
+            episode_limit_input = input("请选择要预览的节目数量（默认 10）: ").strip()
+            if episode_limit_input:
+                try:
+                    episode_limit = int(episode_limit_input)
+                    episode_limit = max(1, min(episode_limit, 50))  # 限制在1-50之间
+                except ValueError:
+                    print("输入无效，使用默认值 10")
+                    episode_limit = 10
+            else:
                 episode_limit = 10
+
+            episodes = explorer.get_recent_episodes(selected_channel['feed_url'], episode_limit)
+
+            # 展示剧集
+            explorer.display_episodes(episodes, selected_channel['name'])
+
+            # 询问用户是否要下载
+            explorer.download_episodes(episodes, selected_channel['name'])
+
+        elif search_type == '2':
+            # 新的集数搜索流程
+            episode_name = input("\n请输入您要搜索的集数名称: ").strip()
+
+            if not episode_name:
+                continue
+
+            # 搜索集数
+            episodes = explorer.search_podcast_episode(episode_name)
+
+            # 显示集数并让用户选择
+            selected_indices = explorer.display_episode_search_results(episodes)
+
+            if not selected_indices:
+                continue
+
+            # 下载选中的集数
+            explorer.download_searched_episodes(episodes, selected_indices)
+
         else:
-            episode_limit = 10
-        
-        episodes = explorer.get_recent_episodes(selected_channel['feed_url'], episode_limit)
-        
-        # 展示剧集
-        explorer.display_episodes(episodes, selected_channel['name'])
-        
-        # 询问用户是否要下载
-        explorer.download_episodes(episodes, selected_channel['name'])
-        
+            print("❌ 选择无效，请输入 1、2 或 0")
+            continue
+
         # 询问用户是否要继续
-        continue_search = input("\n继续搜索其他频道？(y/n): ").strip().lower()
+        continue_search = input("\n继续搜索？(y/n): ").strip().lower()
         if continue_search not in ['y', 'yes']:
             print("🔙 返回主菜单")
             break

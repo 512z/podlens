@@ -2,6 +2,10 @@
 Apple Podcast related features
 """
 
+import warnings
+# Suppress FutureWarning from torch.load in whisper
+warnings.filterwarnings('ignore', category=FutureWarning, module='whisper')
+
 import requests
 import feedparser
 from datetime import datetime
@@ -14,6 +18,7 @@ import subprocess
 from tqdm import tqdm
 from dotenv import load_dotenv
 import google.generativeai as genai
+from . import get_model_name
 
 # Enhanced .env loading function
 def load_env_robust():
@@ -75,7 +80,14 @@ class ApplePodcastExplorer:
         """初始化HTTP会话"""
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': '*/*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Sec-Fetch-Dest': 'audio',
+            'Sec-Fetch-Mode': 'no-cors',
+            'Sec-Fetch-Site': 'cross-site'
         })
         
         # 创建根输出文件夹
@@ -95,8 +107,9 @@ class ApplePodcastExplorer:
         self.api_key = os.getenv('GEMINI_API_KEY')
         if GEMINI_AVAILABLE and self.api_key:
             try:
-                genai.configure(api_key=self.api_key)
+                genai.configure(api_key=self.api_key, transport='rest')
                 self.gemini_client = genai
+                self.model_name = get_model_name()  # 从 .env 获取模型名称
             except Exception as e:
                 print(f"⚠️  Gemini客户端初始化失败: {e}")
                 self.gemini_client = None
@@ -160,7 +173,64 @@ class ApplePodcastExplorer:
         except Exception as e:
             print(f"搜索频道出错: {e}")
             return []
-    
+
+    def search_podcast_episode(self, episode_name: str) -> List[Dict]:
+        """
+        通过名称搜索播客单集
+
+        Args:
+            episode_name: 要搜索的集数名称
+
+        Returns:
+            List[Dict]: 集数信息列表
+        """
+        try:
+            print(f"正在搜索播客集数: {episode_name}")
+
+            search_url = "https://itunes.apple.com/search"
+            params = {
+                'term': episode_name,
+                'media': 'podcast',
+                'entity': 'podcastEpisode',
+                'limit': 20  # 获取多个匹配的集数
+            }
+
+            response = self.session.get(search_url, params=params)
+            response.raise_for_status()
+            data = response.json()
+
+            episodes = []
+            for result in data.get('results', []):
+                # 提取音频URL
+                audio_url = result.get('episodeUrl') or result.get('trackViewUrl')
+
+                # 格式化发布日期
+                published_date = '未知日期'
+                if result.get('releaseDate'):
+                    try:
+                        from datetime import datetime
+                        date_obj = datetime.fromisoformat(result['releaseDate'].replace('Z', '+00:00'))
+                        published_date = date_obj.strftime('%Y-%m-%d')
+                    except:
+                        published_date = result.get('releaseDate', '未知日期')
+
+                episode = {
+                    'episode_title': result.get('trackName', '未知标题'),
+                    'podcast_name': result.get('collectionName', '未知播客'),
+                    'audio_url': audio_url,
+                    'published_date': published_date,
+                    'duration': result.get('trackTimeMillis', 0) // 60000,  # 转换为分钟
+                    'description': result.get('description', '无描述')[:200] + '...' if len(result.get('description', '')) > 200 else result.get('description', '无描述'),
+                    'feed_url': result.get('feedUrl', '')
+                }
+                episodes.append(episode)
+
+            return episodes
+
+        except Exception as e:
+            print(f"搜索集数时出错: {e}")
+            return []
+
     def get_recent_episodes(self, feed_url: str, limit: int = 10) -> List[Dict]:
         """
         获取播客频道的最新剧集
@@ -284,6 +354,59 @@ class ApplePodcastExplorer:
                 print(f"    🎵 音频链接: {episode['audio_url']}")
             print("-" * 80)
     
+    def display_episode_search_results(self, episodes: List[Dict]) -> List[int]:
+        """
+        显示搜索到的集数并让用户选择
+
+        Args:
+            episodes: 搜索返回的集数列表
+
+        Returns:
+            List[int]: 选中的集数索引列表，无效选择返回空列表
+        """
+        if not episodes:
+            print("❌ 未找到匹配的集数")
+            return []
+
+        print(f"\n找到 {len(episodes)} 个匹配的集数:")
+        print("=" * 80)
+
+        for i, episode in enumerate(episodes, 1):
+            duration_str = f"{episode['duration']} 分钟" if episode['duration'] > 0 else "未知时长"
+            print(f"{i:2d}. {episode['episode_title']}")
+            print(f"    📻 播客: {episode['podcast_name']}")
+            print(f"    📅 发布日期: {episode['published_date']}")
+            print(f"    ⏱️  时长: {duration_str}")
+            print(f"    📝 简介: {episode['description']}")
+            print("-" * 80)
+
+        try:
+            print("\n💾 选择选项:")
+            print("格式说明:")
+            print("  - 下载单集: 输入数字，如 '3'")
+            print("  - 下载多集: 用逗号分隔，如 '1,3,5'")
+            print("  - 下载范围: 用连字符，如 '1-5'")
+            print("  - 组合使用: 如 '1,3-5,8'")
+
+            choice = input(f"\n请选择集数 (1-{len(episodes)})，或按回车取消: ").strip()
+
+            if not choice:
+                return []
+
+            # 使用现有方法解析选择
+            selected_indices = self.parse_episode_selection(choice, len(episodes))
+
+            if not selected_indices:
+                print("❌ 未选择有效的集数")
+                return []
+
+            print(f"\n✅ 已选择 {len(selected_indices)} 集")
+            return selected_indices
+
+        except Exception as e:
+            print(f"❌ 选择出错: {e}")
+            return []
+
     def parse_episode_selection(self, user_input: str, max_episodes: int) -> List[int]:
         """
         解析用户的剧集选择输入
@@ -495,9 +618,14 @@ class ApplePodcastExplorer:
                 return True, episode_dir
             
             print(f"📥 正在下载: {episode['title']}")
-            
-            # 下载文件
-            response = self.session.get(episode['audio_url'], stream=True)
+
+            # 下载文件，为播客托管服务添加额外的headers
+            download_headers = {
+                'Referer': 'https://podcasts.apple.com/',
+                'Origin': 'https://podcasts.apple.com',
+                'Range': 'bytes=0-'  # 某些服务器需要Range header
+            }
+            response = self.session.get(episode['audio_url'], stream=True, headers=download_headers, timeout=30)
             response.raise_for_status()
             
             # 获取文件大小
@@ -921,6 +1049,59 @@ class ApplePodcastExplorer:
                 transcript_filepath.unlink()
             return False
     
+    def download_searched_episodes(self, episodes: List[Dict], selected_indices: List[int]):
+        """
+        下载搜索结果中的集数
+
+        Args:
+            episodes: 搜索返回的集数信息列表
+            selected_indices: 选中的集数索引列表（0-based）
+        """
+        if not episodes or not selected_indices:
+            print("❌ 没有要下载的集数")
+            return
+
+        # 下载结果统计
+        success_count = 0
+        total_count = len(selected_indices)
+        downloaded_files = []  # (audio_file_path, episode_title, episode_dir)
+
+        # 下载选中的集数
+        for i, episode_index in enumerate(selected_indices, 1):
+            episode = episodes[episode_index]
+
+            # 使用播客名称作为频道名
+            channel_name = episode['podcast_name']
+            episode_title = episode['episode_title']
+
+            # 检查是否有音频URL
+            if not episode['audio_url']:
+                print(f"❌ 集数无可用音频链接: {episode_title}")
+                continue
+
+            # 创建兼容 download_episode 方法的集数字典
+            download_episode = {
+                'title': episode_title,
+                'audio_url': episode['audio_url'],
+                'published_date': episode['published_date'],
+                'duration': f"{episode['duration']} 分钟" if episode['duration'] > 0 else "未知时长",
+                'description': episode['description']
+            }
+
+            success, episode_dir = self.download_episode(download_episode, i, channel_name)
+            if success and episode_dir:
+                success_count += 1
+                # 构建下载文件路径
+                audio_file = episode_dir / "audio.mp3"
+                downloaded_files.append((audio_file, episode_title, episode_dir))
+
+        # 询问是否转录
+        if success_count > 0 and TRANSCRIPTION_AVAILABLE:
+            # 使用第一个下载集数的频道名（保持一致性）
+            first_episode = episodes[selected_indices[0]]
+            channel_name = first_episode['podcast_name']
+            self.transcribe_downloaded_files(downloaded_files, channel_name, auto_transcribe=True)
+
     def download_episodes(self, episodes: List[Dict], channel_name: str):
         """
         批量下载剧集
@@ -1230,7 +1411,7 @@ class ApplePodcastExplorer:
             {transcript}
             """
             
-            response = self.gemini_client.GenerativeModel("gemini-2.5-flash-preview-05-20").generate_content(prompt)
+            response = self.gemini_client.GenerativeModel(self.model_name).generate_content(prompt)
             
             # 处理响应
             if hasattr(response, 'text'):
@@ -1264,7 +1445,7 @@ class ApplePodcastExplorer:
             
             prompt = f"Translate everything to Chinese accurately without missing anything:\n\n{text}"
             
-            response = self.gemini_client.GenerativeModel("gemini-2.5-flash-preview-05-20").generate_content(prompt)
+            response = self.gemini_client.GenerativeModel(self.model_name).generate_content(prompt)
             
             # 处理响应
             if hasattr(response, 'text'):

@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 import re
 import json
 from typing import List, Dict, Optional
+from . import get_model_name
 
 # 加载环境变量
 load_dotenv()
@@ -27,8 +28,8 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 # 配置Gemini
 if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-2.5-flash-preview-05-20')
+    genai.configure(api_key=GEMINI_API_KEY, transport='rest')
+    model = genai.GenerativeModel(get_model_name())  # 从 .env 获取模型名称
 else:
     model = None
 

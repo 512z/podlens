@@ -48,6 +48,7 @@ Thumbs.db
 # Project specific
 outputs/
 *.log
+.podlens/
 
 .podcast_progress.json
 .podlist

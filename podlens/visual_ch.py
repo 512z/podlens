@@ -7,6 +7,7 @@ import os
 import google.generativeai as genai
 from dotenv import load_dotenv
 from pathlib import Path
+from . import get_model_name
 
 # Enhanced .env loading function
 def load_env_robust():
@@ -43,7 +44,7 @@ def generate_visual_story(input_file: str, output_file: str = None) -> bool:
             print("❌ 环境变量中未找到 GEMINI_API_KEY")
             return False
         
-        genai.configure(api_key=api_key)
+        genai.configure(api_key=api_key, transport='rest')
         client = genai
         
         # Check if input file exists
@@ -298,7 +299,7 @@ def generate_visual_story(input_file: str, output_file: str = None) -> bool:
 
 {content}"""
         
-        response = client.GenerativeModel("gemini-2.5-flash-preview-05-20").generate_content(prompt)
+        response = client.GenerativeModel(get_model_name()).generate_content(prompt)
         
         # Handle the response properly
         if hasattr(response, 'text'):

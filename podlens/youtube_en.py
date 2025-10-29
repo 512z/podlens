@@ -2,6 +2,10 @@
 YouTube related features
 """
 
+import warnings
+# Suppress FutureWarning from torch.load in whisper
+warnings.filterwarnings('ignore', category=FutureWarning, module='whisper')
+
 import requests
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
@@ -13,6 +17,7 @@ import subprocess
 from dotenv import load_dotenv
 import google.generativeai as genai
 import urllib.parse
+from . import get_model_name
 
 # Enhanced .env loading function
 def load_env_robust():
@@ -1110,11 +1115,12 @@ class SummaryGenerator:
     def __init__(self):
         self.api_key = os.getenv('GEMINI_API_KEY')
         self.gemini_client = None
-        
+
         if GEMINI_AVAILABLE and self.api_key:
             try:
-                genai.configure(api_key=self.api_key)
+                genai.configure(api_key=self.api_key, transport='rest')
                 self.gemini_client = genai
+                self.model_name = get_model_name()  # Get model name from .env
             except Exception as e:
                 self.gemini_client = None
         else:
@@ -1145,7 +1151,7 @@ class SummaryGenerator:
             {transcript}
             """
             
-            response = self.gemini_client.GenerativeModel("gemini-2.5-flash-preview-05-20").generate_content(prompt)
+            response = self.gemini_client.GenerativeModel(self.model_name).generate_content(prompt)
             
             # Handle the response properly
             if hasattr(response, 'text'):
@@ -1169,7 +1175,7 @@ class SummaryGenerator:
         try:
             prompt = f"Translate everything to Chinese accurately without missing anything:\n\n{text}"
             
-            response = self.gemini_client.GenerativeModel("gemini-2.5-flash-preview-05-20").generate_content(prompt)
+            response = self.gemini_client.GenerativeModel(self.model_name).generate_content(prompt)
             
             # Handle the response properly
             if hasattr(response, 'text'):

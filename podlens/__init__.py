@@ -5,7 +5,50 @@ Podlens - 智能播客转录与摘要工具 / Intelligent Podcast Transcription 
 Supports Apple Podcast and YouTube platforms with bilingual Chinese/English interface
 """
 
-__version__ = "1.0.0"
+import os
+from dotenv import load_dotenv
+
+__version__ = "1.2.17"
+
+def get_model_name():
+    """
+    从环境变量中获取 Gemini 模型名称
+    Get Gemini model name from environment variables
+
+    优先级 Priority: 项目.env > 全局~/.env
+    如果未找到 MODEL 环境变量，抛出错误
+    If MODEL environment variable is not found, raises an error
+
+    Returns:
+        str: Gemini 模型名称 / Gemini model name
+
+    Raises:
+        ValueError: 如果未配置 MODEL 环境变量 / If MODEL environment variable is not configured
+    """
+    # 先加载全局 ~/.env / Load global ~/.env first
+    global_env_path = os.path.expanduser("~/.env")
+    if os.path.exists(global_env_path):
+        load_dotenv(global_env_path)
+
+    # 再加载项目 .env（会覆盖全局配置）/ Load project .env (overrides global)
+    load_dotenv()
+
+    model = os.getenv("MODEL")
+
+    if not model:
+        raise ValueError(
+            "MODEL environment variable is not set!\n"
+            "MODEL 环境变量未设置！\n\n"
+            "Please add MODEL to your .env file (project directory or ~/.env):\n"
+            "请在 .env 文件中添加 MODEL（项目目录或 ~/.env）：\n\n"
+            "  MODEL=gemini-2.5-flash-lite\n\n"
+            "Example models / 示例模型:\n"
+            "  - gemini-2.5-flash-lite\n"
+            "  - gemini-1.5-pro\n"
+            "  - gemini-2.5-flash-preview-05-20"
+        )
+
+    return model
 
 # 中文版导入 / Chinese version imports
 from .apple_podcast_ch import ApplePodcastExplorer as ApplePodcastExplorer_CH
@@ -97,6 +140,7 @@ __all__ = [
     # 辅助函数 / Helper functions
     'get_chinese_version',
     'get_english_version',
+    'get_model_name',
     
     # 自动化接口 / Automation interface
     'AutomationEngine_CH',

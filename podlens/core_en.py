@@ -3,6 +3,10 @@
 PodLens Core Classes - Core classes optimized for automation
 """
 
+import warnings
+# Suppress FutureWarning from torch.load in whisper
+warnings.filterwarnings('ignore', category=FutureWarning, module='whisper')
+
 import os
 import sys
 import re
@@ -19,6 +23,7 @@ from pathlib import Path
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
 from tqdm import tqdm
+from . import get_model_name
 
 # Enhanced .env loading function
 def load_env_robust():
@@ -97,28 +102,36 @@ class ApplePodcastExplorer:
         """Initialize HTTP session"""
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': '*/*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Sec-Fetch-Dest': 'audio',
+            'Sec-Fetch-Mode': 'no-cors',
+            'Sec-Fetch-Site': 'cross-site'
         })
-        
+
         # Create root output folder
         self.root_output_dir = Path("outputs")
         self.root_output_dir.mkdir(exist_ok=True)
-        
+
         # Initialize MLX Whisper model - always use medium model
         self.whisper_model_name = 'mlx-community/whisper-medium'
-        
+
         # Groq client initialization
         if GROQ_AVAILABLE:
             self.groq_client = Groq(api_key=GROQ_API_KEY)
         else:
             self.groq_client = None
-            
+
         # Gemini client initialization
         self.api_key = os.getenv('GEMINI_API_KEY')
         if GEMINI_AVAILABLE and self.api_key:
             try:
-                genai.configure(api_key=self.api_key)
+                genai.configure(api_key=self.api_key, transport='rest')
                 self.gemini_client = genai
+                self.model_name = get_model_name()  # Get model name from .env
             except Exception as e:
                 print(f"⚠️  Gemini client initialization failed: {e}")
                 self.gemini_client = None
@@ -595,9 +608,14 @@ class ApplePodcastExplorer:
             
             if not quiet:
                 print(f"📥 Downloading: {episode['title']}")
-            
-            # Download file
-            response = self.session.get(episode['audio_url'], stream=True)
+
+            # Download file with additional headers for podcast hosting services
+            download_headers = {
+                'Referer': 'https://podcasts.apple.com/',
+                'Origin': 'https://podcasts.apple.com',
+                'Range': 'bytes=0-'  # Some servers require Range header
+            }
+            response = self.session.get(episode['audio_url'], stream=True, headers=download_headers, timeout=30)
             response.raise_for_status()
             
             # Get file size
@@ -1319,7 +1337,7 @@ class ApplePodcastExplorer:
             {transcript}
             """
             
-            response = self.gemini_client.GenerativeModel("gemini-2.5-flash-preview-05-20").generate_content(prompt)
+            response = self.gemini_client.GenerativeModel(self.model_name).generate_content(prompt)
             
             # Handle the response properly
             if hasattr(response, 'text'):
@@ -1353,7 +1371,7 @@ class ApplePodcastExplorer:
             
             prompt = f"Translate everything to Chinese accurately without missing anything:\n\n{text}"
             
-            response = self.gemini_client.GenerativeModel("gemini-2.5-flash-preview-05-20").generate_content(prompt)
+            response = self.gemini_client.GenerativeModel(self.model_name).generate_content(prompt)
             
             # Handle the response properly
             if hasattr(response, 'text'):

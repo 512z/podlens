@@ -44,9 +44,10 @@ pip install podlens
 # .env 文件内容
 GROQ_API_KEY=your_groq_api_key_here
 GEMINI_API_KEY=your_gemini_api_key_here
+MODEL=gemini-2.5-flash-lite
 ```
 
-### 2\. 获取 API 密钥
+### 2\. 获取 API 密钥与配置模型
 
 **Groq API (推荐 - 超快速转录):**
 
@@ -59,6 +60,16 @@ GEMINI_API_KEY=your_gemini_api_key_here
   - 访问: https://aistudio.google.com/app/apikey
   - 获取免费 API 密钥
   - 用于生成智能摘要
+
+**Gemini 模型 (必须配置 - AI 模型配置):**
+
+  - **必须**在 `.env` 文件中配置
+  - 可用模型：
+    - `gemini-2.5-flash-lite` (推荐 - 快速且经济)
+    - `gemini-1.5-pro` (更强大，质量更高)
+    - `gemini-2.5-flash-preview-05-20` (预览版本)
+  - 工具启动时会显示正在使用的模型
+  - 如果未配置，工具将显示错误并退出
 
 **Notion API (Sync to Notion):**
 

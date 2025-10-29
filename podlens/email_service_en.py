@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 import re
 import json
 from typing import List, Dict, Optional
+from . import get_model_name
 
 # Load environment variables
 load_dotenv()
@@ -27,8 +28,8 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 # Configure Gemini
 if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-2.5-flash-preview-05-20')
+    genai.configure(api_key=GEMINI_API_KEY, transport='rest')
+    model = genai.GenerativeModel(get_model_name())  # Get model name from .env
 else:
     model = None
 

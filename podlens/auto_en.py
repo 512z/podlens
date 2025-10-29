@@ -15,6 +15,7 @@ import json
 import sys
 import argparse
 from dotenv import load_dotenv
+from . import get_model_name
 
 # Enhanced .env loading function
 def load_env_robust():
@@ -403,10 +404,18 @@ class AutoEngine:
             return
         
         print("🤖 Starting PodLens 24x7 Intelligent Automation Service\n")
-        
+
+        # Display model information
+        try:
+            model_name = get_model_name()
+            print(f"🤖 Using Gemini model: {model_name}")
+        except ValueError as e:
+            print(str(e))
+            return
+
         # Ensure configuration files exist
         self.config_manager.ensure_config_files()
-        
+
         self.is_running = True
         
         # Adjust running frequency based on settings

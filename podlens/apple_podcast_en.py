@@ -2,6 +2,10 @@
 Apple Podcast related features
 """
 
+import warnings
+# Suppress FutureWarning from torch.load in whisper
+warnings.filterwarnings('ignore', category=FutureWarning, module='whisper')
+
 import requests
 import feedparser
 from datetime import datetime
@@ -14,6 +18,7 @@ import subprocess
 from tqdm import tqdm
 from dotenv import load_dotenv
 import google.generativeai as genai
+from . import get_model_name
 
 # Enhanced .env loading function
 def load_env_robust():
@@ -74,7 +79,14 @@ class ApplePodcastExplorer:
         """Initialize HTTP session"""
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': '*/*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Sec-Fetch-Dest': 'audio',
+            'Sec-Fetch-Mode': 'no-cors',
+            'Sec-Fetch-Site': 'cross-site'
         })
         
         # Create root output folder
@@ -94,8 +106,9 @@ class ApplePodcastExplorer:
         self.api_key = os.getenv('GEMINI_API_KEY')
         if GEMINI_AVAILABLE and self.api_key:
             try:
-                genai.configure(api_key=self.api_key)
+                genai.configure(api_key=self.api_key, transport='rest')
                 self.gemini_client = genai
+                self.model_name = get_model_name()  # Get model name from .env
             except Exception as e:
                 print(f"⚠️  Gemini client initialization failed: {e}")
                 self.gemini_client = None
@@ -160,6 +173,63 @@ class ApplePodcastExplorer:
             print(f"Error searching channel: {e}")
             return []
     
+    def search_podcast_episode(self, episode_name: str) -> List[Dict]:
+        """
+        Search for podcast episodes by name
+
+        Args:
+            episode_name: Episode name to search for
+
+        Returns:
+            List[Dict]: List of episode information
+        """
+        try:
+            print(f"Searching for podcast episodes: {episode_name}")
+
+            search_url = "https://itunes.apple.com/search"
+            params = {
+                'term': episode_name,
+                'media': 'podcast',
+                'entity': 'podcastEpisode',
+                'limit': 20  # Get multiple matching episodes
+            }
+
+            response = self.session.get(search_url, params=params)
+            response.raise_for_status()
+            data = response.json()
+
+            episodes = []
+            for result in data.get('results', []):
+                # Extract audio URL
+                audio_url = result.get('episodeUrl') or result.get('trackViewUrl')
+
+                # Format publish date
+                published_date = 'Unknown Date'
+                if result.get('releaseDate'):
+                    try:
+                        from datetime import datetime
+                        date_obj = datetime.fromisoformat(result['releaseDate'].replace('Z', '+00:00'))
+                        published_date = date_obj.strftime('%Y-%m-%d')
+                    except:
+                        published_date = result.get('releaseDate', 'Unknown Date')
+
+                episode = {
+                    'episode_title': result.get('trackName', 'Unknown Title'),
+                    'podcast_name': result.get('collectionName', 'Unknown Podcast'),
+                    'audio_url': audio_url,
+                    'published_date': published_date,
+                    'duration': result.get('trackTimeMillis', 0) // 60000,  # Convert to minutes
+                    'description': result.get('description', 'No description')[:200] + '...' if len(result.get('description', '')) > 200 else result.get('description', 'No description'),
+                    'feed_url': result.get('feedUrl', '')
+                }
+                episodes.append(episode)
+
+            return episodes
+
+        except Exception as e:
+            print(f"Error searching episodes: {e}")
+            return []
+
     def get_recent_episodes(self, feed_url: str, limit: int = 10) -> List[Dict]:
         """
         Get recent episodes of a podcast channel
@@ -283,6 +353,59 @@ class ApplePodcastExplorer:
                 print(f"    🎵 Audio URL: {episode['audio_url']}")
             print("-" * 80)
     
+    def display_episode_search_results(self, episodes: List[Dict]) -> List[int]:
+        """
+        Display found episodes from search and let the user choose
+
+        Args:
+            episodes: List of episodes from search
+
+        Returns:
+            List[int]: List of selected episode indices, empty list for invalid selection
+        """
+        if not episodes:
+            print("❌ No matching episodes found")
+            return []
+
+        print(f"\nFound {len(episodes)} matching episodes:")
+        print("=" * 80)
+
+        for i, episode in enumerate(episodes, 1):
+            duration_str = f"{episode['duration']} min" if episode['duration'] > 0 else "Unknown Duration"
+            print(f"{i:2d}. {episode['episode_title']}")
+            print(f"    📻 Podcast: {episode['podcast_name']}")
+            print(f"    📅 Published: {episode['published_date']}")
+            print(f"    ⏱️  Duration: {duration_str}")
+            print(f"    📝 Description: {episode['description']}")
+            print("-" * 80)
+
+        try:
+            print("\n💾 Selection options:")
+            print("Format instructions:")
+            print("  - Select single episode: enter a number, e.g. '3'")
+            print("  - Select multiple episodes: separate with commas, e.g. '1,3,5'")
+            print("  - Select range: use hyphen, e.g. '1-5'")
+            print("  - Combine: e.g. '1,3-5,8'")
+
+            choice = input(f"\nPlease select episodes (1-{len(episodes)}), or press Enter to cancel: ").strip()
+
+            if not choice:
+                return []
+
+            # Parse selection using existing method
+            selected_indices = self.parse_episode_selection(choice, len(episodes))
+
+            if not selected_indices:
+                print("❌ No valid episodes selected")
+                return []
+
+            print(f"\n✅ Selected {len(selected_indices)} episode(s)")
+            return selected_indices
+
+        except Exception as e:
+            print(f"❌ Selection error: {e}")
+            return []
+
     def parse_episode_selection(self, user_input: str, max_episodes: int) -> List[int]:
         """
         Parse user's episode selection input
@@ -562,9 +685,14 @@ class ApplePodcastExplorer:
                 return True, episode_dir
             
             print(f"📥 Downloading: {episode['title']}")
-            
-            # Download file
-            response = self.session.get(episode['audio_url'], stream=True)
+
+            # Download file with additional headers for podcast hosting services
+            download_headers = {
+                'Referer': 'https://podcasts.apple.com/',
+                'Origin': 'https://podcasts.apple.com',
+                'Range': 'bytes=0-'  # Some servers require Range header
+            }
+            response = self.session.get(episode['audio_url'], stream=True, headers=download_headers, timeout=30)
             response.raise_for_status()
             
             # Get file size
@@ -995,6 +1123,59 @@ class ApplePodcastExplorer:
                 transcript_filepath.unlink()
             return False
     
+    def download_searched_episodes(self, episodes: List[Dict], selected_indices: List[int]):
+        """
+        Download episodes from search results
+
+        Args:
+            episodes: List of episode information from search
+            selected_indices: List of selected episode indices (0-based)
+        """
+        if not episodes or not selected_indices:
+            print("❌ No episodes to download")
+            return
+
+        # Download results
+        success_count = 0
+        total_count = len(selected_indices)
+        downloaded_files = []  # (audio_file_path, episode_title, episode_dir)
+
+        # Download selected episodes
+        for i, episode_index in enumerate(selected_indices, 1):
+            episode = episodes[episode_index]
+
+            # Use podcast name as channel name
+            channel_name = episode['podcast_name']
+            episode_title = episode['episode_title']
+
+            # Check if audio URL is available
+            if not episode['audio_url']:
+                print(f"❌ No available audio URL for episode: {episode_title}")
+                continue
+
+            # Create a compatible episode dict for download_episode
+            download_episode = {
+                'title': episode_title,
+                'audio_url': episode['audio_url'],
+                'published_date': episode['published_date'],
+                'duration': f"{episode['duration']} min" if episode['duration'] > 0 else "Unknown Duration",
+                'description': episode['description']
+            }
+
+            success, episode_dir = self.download_episode(download_episode, i, channel_name)
+            if success and episode_dir:
+                success_count += 1
+                # Build downloaded file path
+                audio_file = episode_dir / "audio.mp3"
+                downloaded_files.append((audio_file, episode_title, episode_dir))
+
+        # Ask whether to transcribe
+        if success_count > 0 and TRANSCRIPTION_AVAILABLE:
+            # Get channel name from the first downloaded episode (for consistency)
+            first_episode = episodes[selected_indices[0]]
+            channel_name = first_episode['podcast_name']
+            self.transcribe_downloaded_files(downloaded_files, channel_name, auto_transcribe=True)
+
     def download_episodes(self, episodes: List[Dict], channel_name: str):
         """
         Batch download episodes
@@ -1293,7 +1474,7 @@ class ApplePodcastExplorer:
             {transcript}
             """
             
-            response = self.gemini_client.GenerativeModel("gemini-2.5-flash-preview-05-20").generate_content(prompt)
+            response = self.gemini_client.GenerativeModel(self.model_name).generate_content(prompt)
             
             # Handle the response properly
             if hasattr(response, 'text'):
@@ -1327,7 +1508,7 @@ class ApplePodcastExplorer:
             
             prompt = f"Translate everything to Chinese accurately without missing anything:\n\n{text}"
             
-            response = self.gemini_client.GenerativeModel("gemini-2.5-flash-preview-05-20").generate_content(prompt)
+            response = self.gemini_client.GenerativeModel(self.model_name).generate_content(prompt)
             
             # Handle the response properly
             if hasattr(response, 'text'):
