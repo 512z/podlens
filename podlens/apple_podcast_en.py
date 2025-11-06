@@ -736,13 +736,13 @@ class ApplePodcastExplorer:
     
     def compress_audio_file(self, input_file: Path, output_file: Path, quiet: bool = False) -> bool:
         """
-        Smart two-level audio compression below Groq API limit
-        Prefer 64k for quality, fallback to 48k if still >25MB
-        
+        Smart four-level audio compression below Groq API limit
+        Compression strategy: 64k → 48k → 32k → 24k, checking 25MB limit at each level
+
         Args:
             input_file: Input file path
             output_file: Output file path
-        
+
         Returns:
             bool: Whether compression was successful
         """
@@ -823,16 +823,88 @@ class ApplePodcastExplorer:
                     text=True,
                     check=True
                 )
-                
-                final_size_mb = self.get_file_size_mb(output_file)
+
+                compressed_size_mb = self.get_file_size_mb(output_file)
                 if not quiet:
-                    print(f"✅ 48k compression complete: {output_file.name} ({final_size_mb:.1f}MB)")
-                
-                # Clean up temporary files
-                if temp_64k_file.exists():
-                    temp_64k_file.unlink()
-                
-                return True
+                    print(f"📊 Size after 48k compression: {compressed_size_mb:.1f}MB")
+
+                if compressed_size_mb <= 25:
+                    # 48k compression meets requirements
+                    if not quiet:
+                        print(f"✅ 48k compression complete: {output_file.name} ({compressed_size_mb:.1f}MB)")
+                    # Clean up temporary files
+                    if temp_64k_file.exists():
+                        temp_64k_file.unlink()
+                    return True
+                else:
+                    # Still >25MB after 48k compression, proceed with level 3 32k compression
+                    if not quiet:
+                        print(f"⚠️  Still exceeds 25MB after 48k, proceeding with level 3 32k compression...")
+                        print("📊 Level 3 compression: 16KHz mono, 32kbps MP3")
+
+                    cmd_32k = [
+                        'ffmpeg',
+                        '-i', str(input_file),
+                        '-ar', '16000',        # Downsample to 16KHz
+                        '-ac', '1',            # Mono
+                        '-b:a', '32k',         # 32kbps bitrate
+                        '-y',                  # Overwrite output file
+                        str(output_file)
+                    ]
+
+                    # Run level 3 compression
+                    result = subprocess.run(
+                        cmd_32k,
+                        capture_output=True,
+                        text=True,
+                        check=True
+                    )
+
+                    compressed_size_mb = self.get_file_size_mb(output_file)
+                    if not quiet:
+                        print(f"📊 Size after 32k compression: {compressed_size_mb:.1f}MB")
+
+                    if compressed_size_mb <= 25:
+                        # 32k compression meets requirements
+                        if not quiet:
+                            print(f"✅ 32k compression complete: {output_file.name} ({compressed_size_mb:.1f}MB)")
+                        # Clean up temporary files
+                        if temp_64k_file.exists():
+                            temp_64k_file.unlink()
+                        return True
+                    else:
+                        # Still >25MB after 32k compression, proceed with level 4 24k compression
+                        if not quiet:
+                            print(f"⚠️  Still exceeds 25MB after 32k, proceeding with level 4 24k compression...")
+                            print("📊 Level 4 compression: 16KHz mono, 24kbps MP3")
+
+                        cmd_24k = [
+                            'ffmpeg',
+                            '-i', str(input_file),
+                            '-ar', '16000',        # Downsample to 16KHz
+                            '-ac', '1',            # Mono
+                            '-b:a', '24k',         # 24kbps bitrate
+                            '-y',                  # Overwrite output file
+                            str(output_file)
+                        ]
+
+                        # Run level 4 compression
+                        result = subprocess.run(
+                            cmd_24k,
+                            capture_output=True,
+                            text=True,
+                            check=True
+                        )
+
+                        final_size_mb = self.get_file_size_mb(output_file)
+                        if not quiet:
+                            print(f"✅ 24k compression complete: {output_file.name} ({final_size_mb:.1f}MB)")
+
+                        # Clean up temporary files
+                        if temp_64k_file.exists():
+                            temp_64k_file.unlink()
+
+                        return True
             
         except subprocess.CalledProcessError as e:
             print(f"❌ Compression failed: {e}")

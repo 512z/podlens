@@ -10,7 +10,7 @@
 - 📊 可视化展示
 - 🌏 支持中文/英文双语界面
 
-**中文版 README** | [English README](README.md)
+**中文版 README** | [English README](Projects/podlens/README.md)
 
 ![终端演示](demo/terminal_ch.gif)
 

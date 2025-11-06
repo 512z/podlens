@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "podlens"
-version = "1.2.17"
+version = "1.2.18"
 description = "Intelligent Podcast & Youtube Transcription & Understanding AI Agent"
 readme = "README.md"
 license = {text = "MIT"}

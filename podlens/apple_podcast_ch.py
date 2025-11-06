@@ -669,13 +669,13 @@ class ApplePodcastExplorer:
     
     def compress_audio_file(self, input_file: Path, output_file: Path, quiet: bool = False) -> bool:
         """
-        智能两级压缩音频文件至Groq API限制以下
-        首选64k保证质量，如果仍>25MB则降至48k
-        
+        智能四级压缩音频文件至Groq API限制以下
+        压缩策略: 64k → 48k → 32k → 24k，每级检查是否满足25MB限制
+
         Args:
             input_file: 输入文件路径
             output_file: 输出文件路径
-        
+
         Returns:
             bool: 压缩是否成功
         """
@@ -756,16 +756,88 @@ class ApplePodcastExplorer:
                     text=True,
                     check=True
                 )
-                
-                final_size_mb = self.get_file_size_mb(output_file)
+
+                compressed_size_mb = self.get_file_size_mb(output_file)
                 if not quiet:
-                    print(f"✅ 48k压缩完成: {output_file.name} ({final_size_mb:.1f}MB)")
-                
-                # 清理临时文件
-                if temp_64k_file.exists():
-                    temp_64k_file.unlink()
-                
-                return True
+                    print(f"📊 48k压缩后大小: {compressed_size_mb:.1f}MB")
+
+                if compressed_size_mb <= 25:
+                    # 48k压缩满足要求
+                    if not quiet:
+                        print(f"✅ 48k压缩完成: {output_file.name} ({compressed_size_mb:.1f}MB)")
+                    # 清理临时文件
+                    if temp_64k_file.exists():
+                        temp_64k_file.unlink()
+                    return True
+                else:
+                    # 48k压缩后仍>25MB，进行第三级32k压缩
+                    if not quiet:
+                        print(f"⚠️  48k压缩后仍超25MB，进行第三级32k压缩...")
+                        print("📊 第三级压缩: 16KHz单声道, 32kbps MP3")
+
+                    cmd_32k = [
+                        'ffmpeg',
+                        '-i', str(input_file),
+                        '-ar', '16000',        # 降采样到16KHz
+                        '-ac', '1',            # 单声道
+                        '-b:a', '32k',         # 32kbps码率
+                        '-y',                  # 覆盖输出文件
+                        str(output_file)
+                    ]
+
+                    # 运行第三级压缩
+                    result = subprocess.run(
+                        cmd_32k,
+                        capture_output=True,
+                        text=True,
+                        check=True
+                    )
+
+                    compressed_size_mb = self.get_file_size_mb(output_file)
+                    if not quiet:
+                        print(f"📊 32k压缩后大小: {compressed_size_mb:.1f}MB")
+
+                    if compressed_size_mb <= 25:
+                        # 32k压缩满足要求
+                        if not quiet:
+                            print(f"✅ 32k压缩完成: {output_file.name} ({compressed_size_mb:.1f}MB)")
+                        # 清理临时文件
+                        if temp_64k_file.exists():
+                            temp_64k_file.unlink()
+                        return True
+                    else:
+                        # 32k压缩后仍>25MB，进行第四级24k压缩
+                        if not quiet:
+                            print(f"⚠️  32k压缩后仍超25MB，进行第四级24k压缩...")
+                            print("📊 第四级压缩: 16KHz单声道, 24kbps MP3")
+
+                        cmd_24k = [
+                            'ffmpeg',
+                            '-i', str(input_file),
+                            '-ar', '16000',        # 降采样到16KHz
+                            '-ac', '1',            # 单声道
+                            '-b:a', '24k',         # 24kbps码率
+                            '-y',                  # 覆盖输出文件
+                            str(output_file)
+                        ]
+
+                        # 运行第四级压缩
+                        result = subprocess.run(
+                            cmd_24k,
+                            capture_output=True,
+                            text=True,
+                            check=True
+                        )
+
+                        final_size_mb = self.get_file_size_mb(output_file)
+                        if not quiet:
+                            print(f"✅ 24k压缩完成: {output_file.name} ({final_size_mb:.1f}MB)")
+
+                        # 清理临时文件
+                        if temp_64k_file.exists():
+                            temp_64k_file.unlink()
+
+                        return True
             
         except subprocess.CalledProcessError as e:
             print(f"❌ 压缩失败: {e}")
