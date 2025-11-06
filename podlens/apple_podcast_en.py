@@ -786,6 +786,7 @@ class ApplePodcastExplorer:
                 cmd_64k,
                 capture_output=True,
                 text=True,
+                errors='ignore',  # Ignore encoding errors
                 check=True
             )
             
@@ -821,6 +822,7 @@ class ApplePodcastExplorer:
                     cmd_48k,
                     capture_output=True,
                     text=True,
+                    errors='ignore',  # Ignore encoding errors
                     check=True
                 )
 
@@ -857,6 +859,7 @@ class ApplePodcastExplorer:
                         cmd_32k,
                         capture_output=True,
                         text=True,
+                        errors='ignore',  # Ignore encoding errors
                         check=True
                     )
 
@@ -893,6 +896,7 @@ class ApplePodcastExplorer:
                             cmd_24k,
                             capture_output=True,
                             text=True,
+                            errors='ignore',  # Ignore encoding errors
                             check=True
                         )
 

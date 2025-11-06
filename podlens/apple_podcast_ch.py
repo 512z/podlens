@@ -719,6 +719,7 @@ class ApplePodcastExplorer:
                 cmd_64k,
                 capture_output=True,
                 text=True,
+                errors='ignore',  # 忽略编码错误
                 check=True
             )
             
@@ -754,6 +755,7 @@ class ApplePodcastExplorer:
                     cmd_48k,
                     capture_output=True,
                     text=True,
+                    errors='ignore',  # 忽略编码错误
                     check=True
                 )
 
@@ -790,6 +792,7 @@ class ApplePodcastExplorer:
                         cmd_32k,
                         capture_output=True,
                         text=True,
+                        errors='ignore',  # 忽略编码错误
                         check=True
                     )
 
@@ -826,6 +829,7 @@ class ApplePodcastExplorer:
                             cmd_24k,
                             capture_output=True,
                             text=True,
+                            errors='ignore',  # 忽略编码错误
                             check=True
                         )
 
