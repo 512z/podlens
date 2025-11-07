@@ -576,11 +576,11 @@ class TranscriptExtractor:
                 str(temp_64k_file)
             ]
             
-            # Run first level compression
+            # Run first level compression (use bytes mode to avoid encoding issues)
             result = subprocess.run(
                 cmd_64k,
                 capture_output=True,
-                text=True,
+                text=False,  # Use bytes mode to avoid UTF-8 decoding errors
                 check=True
             )
             
@@ -603,11 +603,11 @@ class TranscriptExtractor:
                     str(output_file)
                 ]
                 
-                # Run second level compression
+                # Run second level compression (use bytes mode to avoid encoding issues)
                 result = subprocess.run(
                     cmd_48k,
                     capture_output=True,
-                    text=True,
+                    text=False,  # Use bytes mode to avoid UTF-8 decoding errors
                     check=True
                 )
                 

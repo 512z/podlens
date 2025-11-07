@@ -581,11 +581,11 @@ class TranscriptExtractor:
                 str(temp_64k_file)
             ]
             
-            # 运行第一级压缩
+            # 运行第一级压缩（使用bytes模式避免编码问题）
             result = subprocess.run(
                 cmd_64k,
                 capture_output=True,
-                text=True,
+                text=False,  # 使用bytes模式避免UTF-8解码错误
                 check=True
             )
             
@@ -608,11 +608,11 @@ class TranscriptExtractor:
                     str(output_file)
                 ]
                 
-                # 运行第二级压缩
+                # 运行第二级压缩（使用bytes模式避免编码问题）
                 result = subprocess.run(
                     cmd_48k,
                     capture_output=True,
-                    text=True,
+                    text=False,  # 使用bytes模式避免UTF-8解码错误
                     check=True
                 )
                 
