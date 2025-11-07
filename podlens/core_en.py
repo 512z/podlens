@@ -672,6 +672,14 @@ class ApplePodcastExplorer:
             bool: Whether compression was successful
         """
         try:
+            # Check if input file exists
+            if not input_file.exists():
+                print(f"❌ Input file does not exist: {input_file}")
+                return False
+            
+            # Ensure output directory exists
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+            
             if quiet:
                 print("🔧 Compressing...")
             else:
@@ -698,12 +706,12 @@ class ApplePodcastExplorer:
             
             cmd_64k = [
                 'ffmpeg',
-                '-i', str(input_file),
+                '-i', str(input_file.resolve()),  # Use absolute path to avoid special character issues
                 '-ar', '16000',        # Downsample to 16KHz
                 '-ac', '1',            # Mono
                 '-b:a', '64k',         # 64kbps bitrate
                 '-y',                  # Overwrite output file
-                str(temp_64k_file)
+                str(temp_64k_file.resolve())  # Use absolute path
             ]
             
             # Run level 1 compression (use bytes mode to avoid encoding issues)
@@ -733,12 +741,12 @@ class ApplePodcastExplorer:
                 
                 cmd_48k = [
                     'ffmpeg',
-                    '-i', str(input_file),
+                    '-i', str(input_file.resolve()),  # Use absolute path to avoid special character issues
                     '-ar', '16000',        # Downsample to 16KHz
                     '-ac', '1',            # Mono
                     '-b:a', '48k',         # 48kbps bitrate
                     '-y',                  # Overwrite output file
-                    str(output_file)
+                    str(output_file.resolve())  # Use absolute path
                 ]
                 
                 # Run level 2 compression (use bytes mode to avoid encoding issues)
@@ -769,12 +777,12 @@ class ApplePodcastExplorer:
 
                     cmd_32k = [
                         'ffmpeg',
-                        '-i', str(input_file),
+                        '-i', str(input_file.resolve()),  # Use absolute path to avoid special character issues
                         '-ar', '16000',        # Downsample to 16KHz
                         '-ac', '1',            # Mono
                         '-b:a', '32k',         # 32kbps bitrate
                         '-y',                  # Overwrite output file
-                        str(output_file)
+                        str(output_file.resolve())  # Use absolute path
                     ]
 
                     # Run level 3 compression (use bytes mode to avoid encoding issues)
@@ -805,12 +813,12 @@ class ApplePodcastExplorer:
 
                         cmd_24k = [
                             'ffmpeg',
-                            '-i', str(input_file),
+                            '-i', str(input_file.resolve()),  # Use absolute path to avoid special character issues
                             '-ar', '16000',        # Downsample to 16KHz
                             '-ac', '1',            # Mono
                             '-b:a', '24k',         # 24kbps bitrate
                             '-y',                  # Overwrite output file
-                            str(output_file)
+                            str(output_file.resolve())  # Use absolute path
                         ]
 
                         # Run level 4 compression (use bytes mode to avoid encoding issues)
@@ -832,13 +840,26 @@ class ApplePodcastExplorer:
                 return True
             
         except subprocess.CalledProcessError as e:
-            print(f"❌ Compression failed: {e}")
+            # Try to decode stderr for more detailed error information
+            error_msg = str(e)
+            if e.stderr:
+                try:
+                    stderr_text = e.stderr.decode('utf-8', errors='ignore')
+                    if stderr_text:
+                        error_msg += f"\n   Error details: {stderr_text[:200]}"  # Limit length
+                except:
+                    pass
+            print(f"❌ Compression failed: {error_msg}")
+            print(f"   Input file: {input_file}")
+            print(f"   Output file: {output_file}")
             # Clean up temporary files
             if 'temp_64k_file' in locals() and temp_64k_file.exists():
                 temp_64k_file.unlink()
             return False
         except Exception as e:
             print(f"❌ Compression error: {e}")
+            print(f"   Input file: {input_file}")
+            print(f"   Output file: {output_file}")
             # Clean up temporary files
             if 'temp_64k_file' in locals() and temp_64k_file.exists():
                 temp_64k_file.unlink()

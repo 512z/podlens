@@ -553,6 +553,14 @@ class TranscriptExtractor:
         """智能两级压缩音频文件至Groq API限制以下 (从Apple模块复制)
         首选64k保证质量，如果仍>25MB则降至48k"""
         try:
+            # 检查输入文件是否存在
+            if not input_file.exists():
+                print(f"❌ 输入文件不存在: {input_file}")
+                return False
+            
+            # 确保输出目录存在
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+            
             print("🔧 正在压缩...")
             
             # 生成安全的临时文件名，不超过255字符
@@ -573,12 +581,12 @@ class TranscriptExtractor:
             
             cmd_64k = [
                 'ffmpeg',
-                '-i', str(input_file),
+                '-i', str(input_file.resolve()),  # 使用绝对路径避免特殊字符问题
                 '-ar', '16000',
                 '-ac', '1',
                 '-b:a', '64k',
                 '-y',
-                str(temp_64k_file)
+                str(temp_64k_file.resolve())  # 使用绝对路径
             ]
             
             # 运行第一级压缩（使用bytes模式避免编码问题）
@@ -600,12 +608,12 @@ class TranscriptExtractor:
                 # 64k压缩后仍>25MB，进行第二级48k压缩
                 cmd_48k = [
                     'ffmpeg',
-                    '-i', str(input_file),
+                    '-i', str(input_file.resolve()),  # 使用绝对路径避免特殊字符问题
                     '-ar', '16000',
                     '-ac', '1',
                     '-b:a', '48k',
                     '-y',
-                    str(output_file)
+                    str(output_file.resolve())  # 使用绝对路径
                 ]
                 
                 # 运行第二级压缩（使用bytes模式避免编码问题）
@@ -623,13 +631,26 @@ class TranscriptExtractor:
                 return True
             
         except subprocess.CalledProcessError as e:
-            print(f"❌ 压缩失败: {e}")
+            # 尝试解码stderr以获取更详细的错误信息
+            error_msg = str(e)
+            if e.stderr:
+                try:
+                    stderr_text = e.stderr.decode('utf-8', errors='ignore')
+                    if stderr_text:
+                        error_msg += f"\n   错误详情: {stderr_text[:200]}"  # 限制长度避免过长
+                except:
+                    pass
+            print(f"❌ 压缩失败: {error_msg}")
+            print(f"   输入文件: {input_file}")
+            print(f"   输出文件: {output_file}")
             # 清理临时文件
             if 'temp_64k_file' in locals() and temp_64k_file.exists():
                 temp_64k_file.unlink()
             return False
         except Exception as e:
             print(f"❌ 压缩出错: {e}")
+            print(f"   输入文件: {input_file}")
+            print(f"   输出文件: {output_file}")
             # 清理临时文件
             if 'temp_64k_file' in locals() and temp_64k_file.exists():
                 temp_64k_file.unlink()

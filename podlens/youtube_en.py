@@ -548,6 +548,14 @@ class TranscriptExtractor:
         """Smart two-level audio compression below Groq API limit (copied from Apple section)
         Prefer 64k for quality, fallback to 48k if still >25MB"""
         try:
+            # Check if input file exists
+            if not input_file.exists():
+                print(f"❌ Input file does not exist: {input_file}")
+                return False
+            
+            # Ensure output directory exists
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+            
             print("🔧 Compressing...")
             
             # Generate safe temporary filename that doesn't exceed 255 chars
@@ -568,12 +576,12 @@ class TranscriptExtractor:
             
             cmd_64k = [
                 'ffmpeg',
-                '-i', str(input_file),
+                '-i', str(input_file.resolve()),  # Use absolute path to avoid special character issues
                 '-ar', '16000',
                 '-ac', '1',
                 '-b:a', '64k',
                 '-y',
-                str(temp_64k_file)
+                str(temp_64k_file.resolve())  # Use absolute path
             ]
             
             # Run first level compression (use bytes mode to avoid encoding issues)
@@ -595,12 +603,12 @@ class TranscriptExtractor:
                 # 64k compression still >25MB, perform second level 48k compression
                 cmd_48k = [
                     'ffmpeg',
-                    '-i', str(input_file),
+                    '-i', str(input_file.resolve()),  # Use absolute path to avoid special character issues
                     '-ar', '16000',
                     '-ac', '1',
                     '-b:a', '48k',
                     '-y',
-                    str(output_file)
+                    str(output_file.resolve())  # Use absolute path
                 ]
                 
                 # Run second level compression (use bytes mode to avoid encoding issues)
@@ -618,13 +626,26 @@ class TranscriptExtractor:
                 return True
             
         except subprocess.CalledProcessError as e:
-            print(f"❌ Compression failed: {e}")
+            # Try to decode stderr for more detailed error information
+            error_msg = str(e)
+            if e.stderr:
+                try:
+                    stderr_text = e.stderr.decode('utf-8', errors='ignore')
+                    if stderr_text:
+                        error_msg += f"\n   Error details: {stderr_text[:200]}"  # Limit length
+                except:
+                    pass
+            print(f"❌ Compression failed: {error_msg}")
+            print(f"   Input file: {input_file}")
+            print(f"   Output file: {output_file}")
             # Clean up temporary file
             if 'temp_64k_file' in locals() and temp_64k_file.exists():
                 temp_64k_file.unlink()
             return False
         except Exception as e:
             print(f"❌ Compression error: {e}")
+            print(f"   Input file: {input_file}")
+            print(f"   Output file: {output_file}")
             # Clean up temporary file
             if 'temp_64k_file' in locals() and temp_64k_file.exists():
                 temp_64k_file.unlink()

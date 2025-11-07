@@ -605,6 +605,14 @@ class ApplePodcastExplorer:
             bool: 压缩是否成功
         """
         try:
+            # 检查输入文件是否存在
+            if not input_file.exists():
+                print(f"❌ 输入文件不存在: {input_file}")
+                return False
+            
+            # 确保输出目录存在
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+            
             if quiet:
                 print("🔧 正在压缩...")
             else:
@@ -631,12 +639,12 @@ class ApplePodcastExplorer:
             
             cmd_64k = [
                 'ffmpeg',
-                '-i', str(input_file),
+                '-i', str(input_file.resolve()),  # 使用绝对路径避免特殊字符问题
                 '-ar', '16000',        # 降采样到16KHz
                 '-ac', '1',            # 单声道
                 '-b:a', '64k',         # 64kbps码率
                 '-y',                  # 覆盖输出文件
-                str(temp_64k_file)
+                str(temp_64k_file.resolve())  # 使用绝对路径
             ]
             
             # 运行第一级压缩（使用bytes模式避免编码问题）
@@ -666,12 +674,12 @@ class ApplePodcastExplorer:
                 
                 cmd_48k = [
                     'ffmpeg',
-                    '-i', str(input_file),
+                    '-i', str(input_file.resolve()),  # 使用绝对路径
                     '-ar', '16000',        # 降采样到16KHz
                     '-ac', '1',            # 单声道
                     '-b:a', '48k',         # 48kbps码率
                     '-y',                  # 覆盖输出文件
-                    str(output_file)
+                    str(output_file.resolve())  # 使用绝对路径
                 ]
                 
                 # 运行第二级压缩（使用bytes模式避免编码问题）
@@ -702,12 +710,12 @@ class ApplePodcastExplorer:
 
                     cmd_32k = [
                         'ffmpeg',
-                        '-i', str(input_file),
+                        '-i', str(input_file.resolve()),  # 使用绝对路径
                         '-ar', '16000',        # 降采样到16KHz
                         '-ac', '1',            # 单声道
                         '-b:a', '32k',         # 32kbps码率
                         '-y',                  # 覆盖输出文件
-                        str(output_file)
+                        str(output_file.resolve())  # 使用绝对路径
                     ]
 
                     # 运行第三级压缩（使用bytes模式避免编码问题）
@@ -738,12 +746,12 @@ class ApplePodcastExplorer:
 
                         cmd_24k = [
                             'ffmpeg',
-                            '-i', str(input_file),
+                            '-i', str(input_file.resolve()),  # 使用绝对路径
                             '-ar', '16000',        # 降采样到16KHz
                             '-ac', '1',            # 单声道
                             '-b:a', '24k',         # 24kbps码率
                             '-y',                  # 覆盖输出文件
-                            str(output_file)
+                            str(output_file.resolve())  # 使用绝对路径
                         ]
 
                         # 运行第四级压缩（使用bytes模式避免编码问题）
@@ -751,27 +759,40 @@ class ApplePodcastExplorer:
                             cmd_24k,
                             capture_output=True,
                             text=False,  # 使用bytes模式避免UTF-8解码错误
-                            check=True
-                        )
-
-                        final_size_mb = self.get_file_size_mb(output_file)
-                        if not quiet:
+                    check=True
+                )
+                
+                final_size_mb = self.get_file_size_mb(output_file)
+                if not quiet:
                             print(f"✅ 24k压缩完成: {output_file.name} ({final_size_mb:.1f}MB)")
-
-                        # 清理临时文件
-                        if temp_64k_file.exists():
-                            temp_64k_file.unlink()
-
-                        return True
+                
+                # 清理临时文件
+                if temp_64k_file.exists():
+                    temp_64k_file.unlink()
+                
+                return True
             
         except subprocess.CalledProcessError as e:
-            print(f"❌ 压缩失败: {e}")
+            # 尝试解码stderr以获取更详细的错误信息
+            error_msg = str(e)
+            if e.stderr:
+                try:
+                    stderr_text = e.stderr.decode('utf-8', errors='ignore')
+                    if stderr_text:
+                        error_msg += f"\n   错误详情: {stderr_text[:200]}"  # 限制长度避免过长
+                except:
+                    pass
+            print(f"❌ 压缩失败: {error_msg}")
+            print(f"   输入文件: {input_file}")
+            print(f"   输出文件: {output_file}")
             # 清理临时文件
             if 'temp_64k_file' in locals() and temp_64k_file.exists():
                 temp_64k_file.unlink()
             return False
         except Exception as e:
             print(f"❌ 压缩出错: {e}")
+            print(f"   输入文件: {input_file}")
+            print(f"   输出文件: {output_file}")
             # 清理临时文件
             if 'temp_64k_file' in locals() and temp_64k_file.exists():
                 temp_64k_file.unlink()
