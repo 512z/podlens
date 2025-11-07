@@ -714,12 +714,10 @@ class ApplePodcastExplorer:
                 str(temp_64k_file)
             ]
             
-            # 运行第一级压缩
+            # 运行第一级压缩（使用bytes模式避免编码问题）
             result = subprocess.run(
                 cmd_64k,
                 capture_output=True,
-                text=True,
-                errors='ignore',  # 忽略编码错误
                 check=True
             )
             
@@ -750,12 +748,10 @@ class ApplePodcastExplorer:
                     str(output_file)
                 ]
                 
-                # 运行第二级压缩
+                # 运行第二级压缩（使用bytes模式避免编码问题）
                 result = subprocess.run(
                     cmd_48k,
                     capture_output=True,
-                    text=True,
-                    errors='ignore',  # 忽略编码错误
                     check=True
                 )
 
@@ -787,12 +783,10 @@ class ApplePodcastExplorer:
                         str(output_file)
                     ]
 
-                    # 运行第三级压缩
+                    # 运行第三级压缩（使用bytes模式避免编码问题）
                     result = subprocess.run(
                         cmd_32k,
                         capture_output=True,
-                        text=True,
-                        errors='ignore',  # 忽略编码错误
                         check=True
                     )
 
@@ -824,12 +818,10 @@ class ApplePodcastExplorer:
                             str(output_file)
                         ]
 
-                        # 运行第四级压缩
+                        # 运行第四级压缩（使用bytes模式避免编码问题）
                         result = subprocess.run(
                             cmd_24k,
                             capture_output=True,
-                            text=True,
-                            errors='ignore',  # 忽略编码错误
                             check=True
                         )
 

@@ -781,12 +781,10 @@ class ApplePodcastExplorer:
                 str(temp_64k_file)
             ]
             
-            # Run level 1 compression
+            # Run level 1 compression (use bytes mode to avoid encoding issues)
             result = subprocess.run(
                 cmd_64k,
                 capture_output=True,
-                text=True,
-                errors='ignore',  # Ignore encoding errors
                 check=True
             )
             
@@ -817,12 +815,10 @@ class ApplePodcastExplorer:
                     str(output_file)
                 ]
                 
-                # Run level 2 compression
+                # Run level 2 compression (use bytes mode to avoid encoding issues)
                 result = subprocess.run(
                     cmd_48k,
                     capture_output=True,
-                    text=True,
-                    errors='ignore',  # Ignore encoding errors
                     check=True
                 )
 
@@ -854,12 +850,10 @@ class ApplePodcastExplorer:
                         str(output_file)
                     ]
 
-                    # Run level 3 compression
+                    # Run level 3 compression (use bytes mode to avoid encoding issues)
                     result = subprocess.run(
                         cmd_32k,
                         capture_output=True,
-                        text=True,
-                        errors='ignore',  # Ignore encoding errors
                         check=True
                     )
 
@@ -891,12 +885,10 @@ class ApplePodcastExplorer:
                             str(output_file)
                         ]
 
-                        # Run level 4 compression
+                        # Run level 4 compression (use bytes mode to avoid encoding issues)
                         result = subprocess.run(
                             cmd_24k,
                             capture_output=True,
-                            text=True,
-                            errors='ignore',  # Ignore encoding errors
                             check=True
                         )
 
