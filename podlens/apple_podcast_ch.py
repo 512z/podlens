@@ -718,6 +718,7 @@ class ApplePodcastExplorer:
             result = subprocess.run(
                 cmd_64k,
                 capture_output=True,
+                text=False,  # 使用bytes模式避免UTF-8解码错误
                 check=True
             )
             
@@ -752,6 +753,7 @@ class ApplePodcastExplorer:
                 result = subprocess.run(
                     cmd_48k,
                     capture_output=True,
+                    text=False,  # 使用bytes模式避免UTF-8解码错误
                     check=True
                 )
 
@@ -787,6 +789,7 @@ class ApplePodcastExplorer:
                     result = subprocess.run(
                         cmd_32k,
                         capture_output=True,
+                        text=False,  # 使用bytes模式避免UTF-8解码错误
                         check=True
                     )
 
@@ -822,6 +825,7 @@ class ApplePodcastExplorer:
                         result = subprocess.run(
                             cmd_24k,
                             capture_output=True,
+                            text=False,  # 使用bytes模式避免UTF-8解码错误
                             check=True
                         )
 
